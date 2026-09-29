@@ -67,9 +67,9 @@ let ids=(d.items||[]).map(x=>x.id?.videoId).filter(Boolean);if(!ids.length)throw
 r=await fetch('https://www.googleapis.com/youtube/v3/videos?'+new URLSearchParams({part:'contentDetails,snippet',id:ids.join(','),key}));d=await r.json();if(!r.ok)throw Error(d.error?.message||'YouTube API 錯誤');
 let arr=(d.items||[]).map(v=>{let m=v.contentDetails.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);let s=(+m?.[1]||0)*3600+(+m?.[2]||0)*60+(+m?.[3]||0);return{id:v.id,title:v.snippet.title,duration:s}}).filter(v=>v.duration>=20);if(!arr.length)throw Error('沒有合適的影片');
 let v=arr[Math.floor(Math.random()*arr.length)],lo=Math.max(3,Math.floor(v.duration*.12)),hi=Math.max(lo+5,Math.floor(v.duration*.88)),t=Math.floor(lo+Math.random()*(hi-lo));
-current={...v,time:t};lastUrl='https://www.youtube.com/watch?v='+v.id+'&t='+t+'s';$('title').textContent=v.title;$('meta').textContent=q+'｜影片長度 '+fmt(v.duration);$('time').textContent=fmt(t);load();addHistory(current)
+current={...v,time:t};lastUrl='https://www.youtube.com/watch?v='+v.id+'&t='+t+'s';$('title').textContent=v.title;$('meta').textContent=q+'｜影片長度 '+fmt(v.duration);$('time').textContent=fmt(t);load();saveToday(current)
 }catch(e){status('搜尋失敗：'+e.message,'bad')}finally{$('pick').disabled=false;$('again').disabled=false}}
-$('pick').onclick=pick;$('again').onclick=pick;$('open').onclick=()=>{if(lastUrl)location.href=lastUrl};$('apiKey').value=localStorage.getItem('ytk')||'';history();
+$('pick').onclick=pick;$('again').onclick=pick;$('open').onclick=()=>{if(lastUrl)location.href=lastUrl};$('apiKey').value=localStorage.getItem('ytk')||'';history();loadToday();
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('install').classList.add('show')});
 $('install').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;$('install').classList.remove('show')}else alert('請使用 Chrome 選單 →「新增至主畫面」或「安裝應用程式」。')};
