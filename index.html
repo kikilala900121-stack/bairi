@@ -16,7 +16,7 @@ h1{margin:0;font-size:28px}.sub{color:#999;margin:4px 0 16px}
 input{flex:1;min-width:220px}button{cursor:pointer}.primary{background:#fff;color:#111;border-color:#fff;font-weight:700}
 #playerBox{aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;position:relative}#player{width:100%;height:100%}
 .grid9{position:absolute;inset:0;display:none;pointer-events:none;z-index:4}
-.grid9.show{display:block}
+.grid9.show{display:block}.compOverlay{position:absolute;inset:0;display:none;pointer-events:none;z-index:5}.compOverlay.show{display:block}.compOverlay.thirds:before{content:"";position:absolute;inset:0;background:linear-gradient(to right,transparent 33%,rgba(255,210,80,.9) 33.1%,rgba(255,210,80,.9) 33.25%,transparent 33.35%,transparent 66.65%,rgba(255,210,80,.9) 66.75%,rgba(255,210,80,.9) 66.9%,transparent 67%),linear-gradient(to bottom,transparent 33%,rgba(255,210,80,.9) 33.1%,rgba(255,210,80,.9) 33.25%,transparent 33.35%,transparent 66.65%,rgba(255,210,80,.9) 66.75%,rgba(255,210,80,.9) 66.9%,transparent 67%)}.compOverlay.center:before,.compOverlay.center:after{content:"";position:absolute;background:rgba(255,255,255,.85)}.compOverlay.center:before{left:0;right:0;top:50%;height:2px}.compOverlay.center:after{top:0;bottom:0;left:50%;width:2px}.compOverlay.diagonal:before{content:"";position:absolute;inset:0;background:linear-gradient(33deg,transparent 49.7%,rgba(120,200,255,.9) 50%,transparent 50.3%),linear-gradient(-33deg,transparent 49.7%,rgba(120,200,255,.9) 50%,transparent 50.3%)}.compOverlay.gold:before{content:"";position:absolute;inset:10% 18%;border:2px solid rgba(255,190,70,.85);border-radius:50%;transform:rotate(-12deg)}
 .grid9:before,.grid9:after{content:"";position:absolute;inset:0}
 .grid9:before{background:linear-gradient(to right,transparent 33.05%,rgba(255,255,255,.72) 33.2%,rgba(255,255,255,.72) 33.35%,transparent 33.5%,transparent 66.5%,rgba(255,255,255,.72) 66.65%,rgba(255,255,255,.72) 66.8%,transparent 66.95%)}
 .grid9:after{background:linear-gradient(to bottom,transparent 33.05%,rgba(255,255,255,.72) 33.2%,rgba(255,255,255,.72) 33.35%,transparent 33.5%,transparent 66.5%,rgba(255,255,255,.72) 66.65%,rgba(255,255,255,.72) 66.8%,transparent 66.95%)}
@@ -50,12 +50,12 @@ body.locked .wrap{user-select:none}
 <small>API Key 只儲存在本機瀏覽器。</small>
 </div>
 <div class="card">
-<div id="playerBox"><div id="player"></div><div id="grid9" class="grid9" aria-hidden="true"></div></div>
+<div id="playerBox"><div id="player"></div><div id="grid9" class="grid9" aria-hidden="true"></div><div id="compOverlay" class="compOverlay" aria-hidden="true"></div></div>
 <div class="grid"><div><b id="title">尚未抽取</b><div><small id="meta"></small></div></div><div class="time" id="time">--:--</div></div>
 <div id="status">輸入題材後按「隨機取景」。</div>
-<div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div><div class="timer"><select id="timerPreset"><option value="300">5 分鐘</option><option value="900" selected>15 分鐘</option><option value="1800">30 分鐘</option><option value="3600">60 分鐘</option></select><div><div class="timerDisplay" id="timerDisplay">15:00</div><div class="timerProgress"><i id="timerProgress"></i></div></div><div class="timerBtns"><button id="timerStart">▶ 開始</button><button id="timerReset">↺ 重設</button></div></div>
+<div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="compBtn">📐 構圖模式</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div><div class="timer"><select id="timerPreset"><option value="300">5 分鐘</option><option value="900" selected>15 分鐘</option><option value="1800">30 分鐘</option><option value="3600">60 分鐘</option></select><div><div class="timerDisplay" id="timerDisplay">15:00</div><div class="timerProgress"><i id="timerProgress"></i></div></div><div class="timerBtns"><button id="timerStart">▶ 開始</button><button id="timerReset">↺ 重設</button></div></div>
 </div>
-<div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
+<div class="card"><b>📐 構圖模式</b><div class="tip">三分法、中心十字、對角線、黃金構圖。</div><div class="row" style="margin-top:9px"><select id="compType"><option value="thirds">三分法</option><option value="center">中心十字</option><option value="diagonal">對角線</option><option value="gold">黃金構圖</option></select><button id="compApply">顯示構圖線</button></div></div><div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
 <div class="card"><b>📅 100 日紀錄</b><div id="history" class="history">尚無紀錄</div></div>
 </div>
 <div class="lockLayer" id="lockLayer"><button class="unlock" id="unlockBtn">🔓 解鎖畫面</button></div>
@@ -127,7 +127,7 @@ document.body.classList.toggle('locked',on);
 if(on){requestWakeLock();status('🔒 畫面已鎖定：可專心作畫。點右上角「解鎖畫面」返回操作。','ok')}
 else releaseWakeLock();
 }
-$('gridBtn').onclick=function(){
+$('compApply').onclick=function(){let o=$('compOverlay');o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖'};$('compBtn').onclick=function(){let o=$('compOverlay');if(o.classList.contains('show')){o.classList.remove('show');$('compBtn').textContent='📐 構圖模式'}else{o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖'}};$('gridBtn').onclick=function(){
 $('grid9').classList.toggle('show');
 $('gridBtn').textContent=$('grid9').classList.contains('show')?'▦ 關閉九宮格':'▦ 九宮格';
 };
