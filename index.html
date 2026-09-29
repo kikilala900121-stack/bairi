@@ -26,7 +26,7 @@ body.locked .lockLayer{display:block}
 body.locked .wrap{user-select:none}
 .history button{display:block;width:100%;text-align:left;margin:4px 0;padding:9px 10px;background:#222;border:1px solid #333;color:#ddd;border-radius:10px}
 .history button.currentDay{border-color:#888;color:#fff}
-.grid{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}.time{font-size:20px;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}.time{font-size:20px;font-variant-numeric:tabular-nums}\n.timer{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;margin-top:12px;padding:10px 12px;background:#151515;border:1px solid #333;border-radius:12px}.timerDisplay{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;min-width:72px;text-align:center}.timerProgress{height:7px;background:#333;border-radius:99px;overflow:hidden}.timerProgress i{display:block;height:100%;width:0;background:#eee;transition:width .3s linear}.timerBtns{display:flex;gap:6px}.timerBtns button{padding:8px 10px}
 #status{color:#aaa;margin-top:10px;white-space:pre-wrap}.ok{color:#9be6a8}.bad{color:#ff9b9b}
 .history{max-height:180px;overflow:auto;color:#aaa;font-size:14px;line-height:1.8}.tip{color:#bbb;line-height:1.6}
 .install{display:none;background:#eee;color:#111;border:0}.install.show{display:inline-block}
@@ -53,7 +53,7 @@ body.locked .wrap{user-select:none}
 <div id="playerBox"><div id="player"></div><div id="grid9" class="grid9" aria-hidden="true"></div></div>
 <div class="grid"><div><b id="title">尚未抽取</b><div><small id="meta"></small></div></div><div class="time" id="time">--:--</div></div>
 <div id="status">輸入題材後按「隨機取景」。</div>
-<div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div>
+<div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div>\n<div class="timer"><select id="timerPreset" aria-label="繪畫時間"><option value="300">5 分鐘</option><option value="900" selected>15 分鐘</option><option value="1800">30 分鐘</option><option value="3600">60 分鐘</option></select><div><div class="timerDisplay" id="timerDisplay">15:00</div><div class="timerProgress"><i id="timerProgress"></i></div></div><div class="timerBtns"><button id="timerStart">▶ 開始</button><button id="timerReset">↺ 重設</button></div></div>
 </div>
 <div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
 <div class="card"><b>📅 100 日紀錄</b><div id="history" class="history">尚無紀錄</div></div>
@@ -109,7 +109,7 @@ if(x.scene)$('sceneType').value=x.scene;
 load();
 status('今天已抽取過，繼續使用今天這個場景即可。','ok');
 }
-let wakeLock=null;
+let wakeLock=null;\nlet timerId=null,timerLeft=900,timerTotal=900;\nfunction renderTimer(){$('timerDisplay').textContent=fmt(timerLeft);let p=timerTotal?((timerTotal-timerLeft)/timerTotal)*100:0;$('timerProgress').style.width=p+'%';$('timerStart').textContent=timerId?'⏸ 暫停':'▶ 開始'}\nfunction resetTimer(){clearInterval(timerId);timerId=null;timerTotal=Number($('timerPreset').value);timerLeft=timerTotal;renderTimer()}\nfunction toggleTimer(){if(timerId){clearInterval(timerId);timerId=null;renderTimer();status('計時器已暫停。','ok');return}if(timerLeft<=0)resetTimer();timerId=setInterval(function(){timerLeft--;renderTimer();if(timerLeft<=0){clearInterval(timerId);timerId=null;renderTimer();if(navigator.vibrate)navigator.vibrate([250,120,250]);status('⏰ 時間到！可以檢查作品、休息一下，或開始下一張。','ok');}},1000);status('⏱ 已開始 '+fmt(timerLeft)+' 倒數，專心畫就好。','ok')}\n$('timerPreset').onchange=resetTimer;$('timerStart').onclick=toggleTimer;$('timerReset').onclick=function(){resetTimer();status('計時器已重設。','ok')};renderTimer();
 async function requestWakeLock(){
 try{if('wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen')}
 catch(e){status('畫面鎖定已開啟，但瀏覽器未允許保持螢幕常亮。','bad')}
