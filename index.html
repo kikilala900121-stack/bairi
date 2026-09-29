@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#111111">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="manifest" href="manifest.json">
+<title>百日繪</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111;color:#eee;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}
+.wrap{max-width:1100px;margin:auto;padding:16px}.head{display:flex;justify-content:space-between;align-items:end}
+h1{margin:0;font-size:28px}.sub{color:#999;margin:4px 0 16px}
+.card{background:#1b1b1b;border:1px solid #333;border-radius:18px;padding:16px;margin:12px 0}
+.row{display:flex;gap:9px;flex-wrap:wrap}input,select,button{font:inherit;border-radius:11px;border:1px solid #444;padding:12px;background:#252525;color:#fff}
+input{flex:1;min-width:220px}button{cursor:pointer}.primary{background:#fff;color:#111;border-color:#fff;font-weight:700}
+#playerBox{aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden}#player{width:100%;height:100%}
+.grid{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}.time{font-size:20px;font-variant-numeric:tabular-nums}
+#status{color:#aaa;margin-top:10px;white-space:pre-wrap}.ok{color:#9be6a8}.bad{color:#ff9b9b}
+.history{max-height:180px;overflow:auto;color:#aaa;font-size:14px;line-height:1.8}.tip{color:#bbb;line-height:1.6}
+.install{display:none;background:#eee;color:#111;border:0}.install.show{display:inline-block}
+@media(max-width:650px){.wrap{padding:10px}h1{font-size:23px}.grid{grid-template-columns:1fr}.card{padding:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="head"><div><h1>百日繪</h1><div class="sub">電影・電視劇角色隨機取景器</div></div><div id="day"></div></div>
+<div class="card">
+<div class="row">
+<input id="query" placeholder="例如：哈利波特、日劇、漫威、甄嬛傳、動漫">
+<select id="sceneType">
+<option value="scene">一般場景</option><option value="drama">劇情片段</option><option value="action">動作場景</option>
+<option value="portrait">人物特寫</option><option value="fullbody">全身人物</option><option value="anime">動畫角色</option>
+</select>
+<button class="primary" id="pick">🎲 隨機取景</button>
+<button id="install" class="install">＋ 加到主畫面</button>
+</div>
+<div style="margin-top:9px"><input id="apiKey" type="password" placeholder="第一次使用：輸入 YouTube Data API v3 Key"></div>
+<small>API Key 只儲存在本機瀏覽器。</small>
+</div>
+<div class="card">
+<div id="playerBox"><div id="player"></div></div>
+<div class="grid"><div><b id="title">尚未抽取</b><div><small id="meta"></small></div></div><div class="time" id="time">--:--</div></div>
+<div id="status">輸入題材後按「隨機取景」。</div>
+<div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="open">↗ YouTube</button></div>
+</div>
+<div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
+<div class="card"><b>📅 100 日紀錄</b><div id="history" class="history">尚無紀錄</div></div>
+</div>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+let player=null,ready=false,current=null,lastUrl='';
+const $=x=>document.getElementById(x);
+function fmt(n){n=Math.max(0,Math.floor(n||0));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')}
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]) )}
+function status(s,c){$('status').textContent=s;$('status').className=c||''}
+function history(){let h=JSON.parse(localStorage.getItem('brh')||'[]');$('history').innerHTML=h.length?h.slice().reverse().map((x,i)=>`${h.length-i}. ${esc(x.d)}｜${esc(x.t)}｜${fmt(x.s)}`).join('<br>'):'尚無紀錄';$('day').textContent=`第 ${Math.min(h.length+1,100)} / 100 天`}
+function addHistory(x){let h=JSON.parse(localStorage.getItem('brh')||'[]');h.push({d:new Date().toLocaleDateString('zh-TW'),t:x.title,s:x.time});localStorage.setItem('brh',JSON.stringify(h.slice(-100)));history()}
+function onYouTubeIframeAPIReady(){makePlayer()}
+function makePlayer(){if(!window.YT||!YT.Player)return;player=new YT.Player('player',{width:'100%',height:'100%',playerVars:{playsinline:1,rel:0,origin:location.origin},events:{onReady:()=>{ready=true;if(current)load()},onError:e=>{let c=e.data;if(c===153)status('YouTube Error 153：此頁面沒有提供有效 Referer。請確認你是從 HTTPS 網址開啟，而不是從檔案管理器直接開 HTML。','bad');else if(c===101||c===150){status('此影片禁止嵌入，正在換下一部……','bad');setTimeout(()=>pick(),700)}else status('YouTube 播放器錯誤：'+c,'bad')}}})}
+function load(){if(!ready||!current)return;try{player.cueVideoById({videoId:current.id,startSeconds:current.time});setTimeout(()=>{try{player.seekTo(current.time,true);player.pauseVideo();status('完成！按播放開始今天的百日繪。','ok')}catch(e){}},1200)}catch(e){status('載入失敗：'+e.message,'bad')}}
+async function pick(){let key=$('apiKey').value.trim(),q=$('query').value.trim();if(!key)return status('請輸入 YouTube Data API v3 Key。','bad');if(!q)return status('請輸入想畫的題材。','bad');localStorage.setItem('ytk',key);$('pick').disabled=true;$('again').disabled=true;status('正在搜尋 YouTube……');try{
+let typ={scene:' scene clip',drama:' drama scene',action:' action scene',portrait:' character close up',fullbody:' character full body',anime:' anime character scene'}[$('sceneType').value];
+let u='https://www.googleapis.com/youtube/v3/search?'+new URLSearchParams({part:'snippet',type:'video',q:q+typ,maxResults:20,videoEmbeddable:'true',safeSearch:'moderate',key});
+let r=await fetch(u),d=await r.json();if(!r.ok)throw Error(d.error?.message||'YouTube API 錯誤');
+let ids=(d.items||[]).map(x=>x.id?.videoId).filter(Boolean);if(!ids.length)throw Error('找不到影片，請換關鍵字');
+r=await fetch('https://www.googleapis.com/youtube/v3/videos?'+new URLSearchParams({part:'contentDetails,snippet',id:ids.join(','),key}));d=await r.json();if(!r.ok)throw Error(d.error?.message||'YouTube API 錯誤');
+let arr=(d.items||[]).map(v=>{let m=v.contentDetails.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);let s=(+m?.[1]||0)*3600+(+m?.[2]||0)*60+(+m?.[3]||0);return{id:v.id,title:v.snippet.title,duration:s}}).filter(v=>v.duration>=20);if(!arr.length)throw Error('沒有合適的影片');
+let v=arr[Math.floor(Math.random()*arr.length)],lo=Math.max(3,Math.floor(v.duration*.12)),hi=Math.max(lo+5,Math.floor(v.duration*.88)),t=Math.floor(lo+Math.random()*(hi-lo));
+current={...v,time:t};lastUrl='https://www.youtube.com/watch?v='+v.id+'&t='+t+'s';$('title').textContent=v.title;$('meta').textContent=q+'｜影片長度 '+fmt(v.duration);$('time').textContent=fmt(t);load();addHistory(current)
+}catch(e){status('搜尋失敗：'+e.message,'bad')}finally{$('pick').disabled=false;$('again').disabled=false}}
+$('pick').onclick=pick;$('again').onclick=pick;$('open').onclick=()=>{if(lastUrl)location.href=lastUrl};$('apiKey').value=localStorage.getItem('ytk')||'';history();
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('install').classList.add('show')});
+$('install').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;$('install').classList.remove('show')}else alert('請使用 Chrome 選單 →「新增至主畫面」或「安裝應用程式」。')};
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body></html>
