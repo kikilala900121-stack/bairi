@@ -136,6 +136,130 @@ $('unlockBtn').onclick=function(){setLocked(false)};
 document.addEventListener('visibilitychange',function(){
 if(document.visibilityState==='visible'&&document.body.classList.contains('locked'))requestWakeLock();
 });
+let ytApiReady=false;
+
+function onYouTubeIframeAPIReady(){
+  ytApiReady=true;
+  makePlayer();
+  if(current) setTimeout(load,100);
+}
+window.onYouTubeIframeAPIReady=onYouTubeIframeAPIReady;
+
+function makePlayer(){
+  if(player||!window.YT||!YT.Player)return;
+  player=new YT.Player('player',{
+    width:'100%',
+    height:'100%',
+    videoId:current?current.id:'',
+    playerVars:{playsinline:1,origin:location.origin,rel:0},
+    events:{
+      onReady:function(){ready=true;if(current)load()},
+      onError:function(e){
+        let msg='影片無法嵌入';
+        if(e.data===101||e.data===150)msg='這部影片禁止嵌入，請再抽一次。';
+        else if(e.data===100)msg='這部影片已不存在或設為私人，請再抽一次。';
+        else if(e.data===153)msg='YouTube 嵌入驗證失敗，請重新整理頁面後再試。';
+        status(msg,'bad');
+      }
+    }
+  });
+}
+
+function load(){
+  if(!current)return;
+  if(!player||!ready){
+    status('取景完成，正在載入播放器……','ok');
+    if(window.YT&&YT.Player)makePlayer();
+    return;
+  }
+  try{
+    player.loadVideoById({videoId:current.id,startSeconds:current.time||0});
+    status('已抽到今天的場景！','ok');
+  }catch(e){
+    status('播放器載入失敗，請重新整理頁面後再試。','bad');
+  }
+}
+
+function getHistory(){
+  try{
+    let h=JSON.parse(localStorage.getItem('brh')||'[]');
+    if(!Array.isArray(h))return[];
+    let map={};
+    h.forEach(function(x){if(x&&x.d)map[x.d]=x});
+    return Object.keys(map).sort(function(a,b){return new Date(a)-new Date(b)}).map(function(k){return map[k]}).slice(-100);
+  }catch(e){return[]}
+}
+
+async function pick(){
+  let key=$('apiKey').value.trim();
+  if(!key){
+    status('請先輸入 YouTube Data API v3 Key。','bad');
+    $('apiKey').focus();
+    return;
+  }
+  localStorage.setItem('ytk',key);
+  let q=$('query').value.trim();
+  if(!q){
+    status('請先輸入想畫的題材，例如：哈利波特、日劇、漫威。','bad');
+    $('query').focus();
+    return;
+  }
+  if(getHistory().some(function(x){return x.d===new Date().toLocaleDateString('zh-TW')})){
+    status('今天已經抽過題目了；明天再抽新題。','bad');
+    return;
+  }
+
+  let type=$('sceneType').value;
+  let suffix={
+    scene:'',
+    drama:' 劇情片段',
+    action:' 動作場景',
+    portrait:' 人物特寫',
+    fullbody:' 全身人物',
+    anime:' 動畫角色'
+  }[type]||'';
+  let searchQ=q+suffix;
+
+  status('正在搜尋 YouTube……','ok');
+  try{
+    let searchUrl='https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&safeSearch=moderate&maxResults=20&q='+encodeURIComponent(searchQ)+'&key='+encodeURIComponent(key);
+    let sr=await fetch(searchUrl);
+    let sj=await sr.json();
+    if(!sr.ok)throw new Error(sj.error&&sj.error.message?sj.error.message:'YouTube 搜尋失敗');
+    let ids=(sj.items||[]).map(function(x){return x.id&&x.id.videoId}).filter(Boolean);
+    if(!ids.length){status('找不到符合條件的 YouTube 影片，請換一個題材。','bad');return}
+
+    let vr=await fetch('https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id='+ids.map(encodeURIComponent).join(',')+'&key='+encodeURIComponent(key));
+    let vj=await vr.json();
+    if(!vr.ok)throw new Error(vj.error&&vj.error.message?vj.error.message:'影片資料取得失敗');
+
+    let candidates=(vj.items||[]).map(function(v){
+      let m=(v.contentDetails.duration||'').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+      let sec=(m?((Number(m[1]||0)*3600)+(Number(m[2]||0)*60)+Number(m[3]||0)):0);
+      return {id:v.id,title:v.snippet&&v.snippet.title||'',duration:sec};
+    }).filter(function(v){return v.duration>=30});
+
+    if(!candidates.length){status('找到的影片都太短，請換題材再試。','bad');return}
+
+    let x=candidates[Math.floor(Math.random()*candidates.length)];
+    let min=Math.max(5,Math.floor(x.duration*0.12));
+    let max=Math.max(min,Math.floor(x.duration*0.88));
+    x.time=min+Math.floor(Math.random()*(max-min+1));
+    x.query=q;x.scene=type;
+    current=x;
+    lastUrl='https://www.youtube.com/watch?v='+x.id+'&t='+x.time+'s';
+    $('title').textContent=x.title;
+    $('meta').textContent=q+'｜影片長度 '+fmt(x.duration);
+    $('time').textContent=fmt(x.time);
+    saveToday(x);
+    status('已抽到今天的場景！正在載入影片……','ok');
+    load();
+  }catch(e){
+    console.error(e);
+    status('隨機抽取失敗：'+(e.message||'未知錯誤')+'\n請確認 API Key 有啟用 YouTube Data API v3。','bad');
+  }
+}
+
 $('pick').onclick=pick;
 $('again').onclick=function(){
 let today=new Date().toLocaleDateString('zh-TW');
