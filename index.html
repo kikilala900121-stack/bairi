@@ -667,35 +667,54 @@ async function randomGoogleImage(q){
   const extra={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
   const searchQ=(q||'').trim()+extra;
   if(!searchQ){status('請先輸入主題，例如「哈利波特」。','bad');return}
-  $('playerBox').style.display='none'; $('imageStage').style.display='block';
+  $('playerBox').style.display='none';
+  $('imageStage').style.display='block';
+  $('title').textContent='🔎 Google 圖片｜'+searchQ;
+  $('meta').textContent='正在隨機搜尋圖片……';
+  $('time').textContent='Google';
   status('🎲 正在從「'+searchQ+'」隨機取得圖片……','ok');
-  // Google image result thumbnails are intentionally not scraped directly by the page.
-  // Use a public image-search proxy endpoint, then select a random image URL.
-  const endpoints=[
-    'https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ),
-    'https://www.google.com/search?udm=2&q='+encodeURIComponent(searchQ)
-  ];
+
   try{
     const reader='https://r.jina.ai/http://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
     const rr=await fetch(reader,{mode:'cors',cache:'no-store'});
-    if(!rr.ok)throw new Error('Google image search unavailable');
-    const text=await rr.text();
+    if(!rr.ok)throw new Error('搜尋服務 HTTP '+rr.status);
+    const body=await rr.text();
+
+    // 從搜尋結果文字中找出圖片 URL，避免複雜正規表示式造成頁面 JS 失效。
+    const raw=body.match(/https?:\\/\\/[^\\s"'<>]+/g)||[];
     const urls=[];
-    const re=/https?:\\?\/\\?\/[^\s"'<>\\]+/g;
-    let m;
-    while((m=re.exec(text))&&urls.length<100){
-      let u=m[0].replace(/\\\//g,'/').replace(/\\u0026/g,'&').replace(/&amp;/g,'&');
-      if(/^https?:\/\//i.test(u) && /\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(u) && !/google\./i.test(u) && !urls.includes(u))urls.push(u);
-    }
-    if(!urls.length)throw new Error('找不到可用圖片');
+    raw.forEach(function(v){
+      let u=v.replace(/\\\\\//g,'/').replace(/&amp;/g,'&');
+      if(/^https?:\\/\\//i.test(u) &&
+         /\\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(u) &&
+         !/google\\./i.test(u) &&
+         !/gstatic\\./i.test(u) &&
+         urls.indexOf(u)<0) urls.push(u);
+    });
+
+    if(!urls.length)throw new Error('搜尋結果沒有可用圖片網址');
+
     const chosen=urls[Math.floor(Math.random()*urls.length)];
+    $('imageResult').innerHTML='<div class="tip">已抽到圖片，正在下載……</div>';
     analyzeExternalImage(chosen,'Google 圖片｜'+searchQ,false,chosen);
   }catch(e){
-    console.error(e);
-    // Keep a reliable fallback: open the exact Google Images search rather than pretending a random image was found.
-    window.open(endpoints[0],'_blank','noopener');
-    status('Google 暫時限制自動讀取圖片；已開啟「'+searchQ+'」圖片搜尋。你可以貼圖片網址或選手機圖片。','bad');
+    console.error('Google random image error:',e);
+    $('meta').textContent='Google 圖片自動抓取失敗';
+    $('imageResult').innerHTML='<div class="tip">Google 暫時限制自動讀取圖片。</div>';
+    status('⚠️ Google 圖片目前無法自動提供圖片；請按「開啟 Google 圖片搜尋」，或貼圖片網址／手機選圖。','bad');
+    showGoogleFallback(searchQ);
   }
+}
+
+function showGoogleFallback(searchQ){
+  const url='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🔎 Google 圖片</b><p class="tip">目前無法直接讀取搜尋結果，仍可開啟同一個主題的 Google 圖片搜尋。</p><button class="primary" id="googleFallbackBtn">開啟 Google 圖片</button><div style="margin-top:12px"><input id="googleFallbackUrl" placeholder="貼上圖片網址後分析" style="width:100%;min-width:0"></div><button id="googleFallbackAnalyze" style="margin-top:8px">🔍 分析圖片</button></div>';
+  $('googleFallbackBtn').onclick=function(){window.open(url,'_blank','noopener')};
+  $('googleFallbackAnalyze').onclick=function(){
+    const v=($('googleFallbackUrl').value||'').trim();
+    if(/^https?:\\/\\//i.test(v))analyzeExternalImage(v,'Google 圖片',false,v);
+    else status('請貼上完整圖片網址。','bad');
+  };
 }
 
 
