@@ -455,12 +455,16 @@ async function pickTVMazeImage(q){
 function showPinterestPicker(searchQ,url){
   $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;
   $('title').textContent='Pinterest｜'+searchQ;$('meta').textContent='先在 Pinterest 選圖，再回百日繪分析';$('time').textContent='Pinterest';
-  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest → 百日繪</b><p class="tip">先開啟 Pinterest 選一張想畫的圖。回到百日繪後，可以貼上圖片網址；如果 Pinterest 不方便取得圖片網址，也可以先把圖片存到手機，再用「選取手機圖片」。</p><div class="row" style="margin-top:10px"><button class="primary" onclick="window.open(\\''+escAttr(url)+'\\',\\'_blank\\',\\'noopener\\')">📌 開啟 Pinterest 選圖</button></div><div style="margin-top:14px"><input id="pinImageUrl" placeholder="貼上 Pinterest 圖片網址（https://...）" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" onclick="analyzePinterestUrl()">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="pinImageFile" type="file" accept="image/*" style="display:none" onchange="analyzePinterestFile(this.files[0])"></label></div><div class="tip" style="margin-top:9px">提示：Pinterest 的 Pin 頁面網址不一定就是圖片檔網址；若貼 Pin 網址無法顯示，請下載圖片後用「選取手機圖片」。</div></div>';
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest → 百日繪</b><p class="tip">先開啟 Pinterest 選一張想畫的圖。回到百日繪後，可以貼上圖片網址；如果 Pinterest 不方便取得圖片網址，也可以先把圖片存到手機，再用「選取手機圖片」。</p><div class="row" style="margin-top:10px"><button class="primary" id="pinOpenBtn">📌 開啟 Pinterest 選圖</button></div><div style="margin-top:14px"><input id="pinImageUrl" placeholder="貼上 Pinterest 圖片網址（https://...）" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="pinAnalyzeUrlBtn">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="pinImageFile" type="file" accept="image/*" style="display:none"></label></div><div class="tip" style="margin-top:9px">提示：Pinterest 的 Pin 頁面網址不一定就是圖片檔網址；若貼 Pin 網址無法顯示，請下載圖片後用「選取手機圖片」。</div></div>';
+  $('pinOpenBtn').onclick=function(){window.open(url,'_blank','noopener')};
+  $('pinAnalyzeUrlBtn').onclick=analyzePinterestUrl;
+  $('pinImageFile').onchange=function(){analyzePinterestFile(this.files[0])};
   saveToday({title:'Pinterest｜'+searchQ,time:0,duration:0,id:'',source:'pinterest',query:$('query').value.trim(),scene:$('sceneType').value,original:url});
   status('已開啟 Pinterest 選圖流程。選好圖後回來即可貼網址或選手機圖片。','ok');
 }
 function analyzePinterestUrl(){
-  const url=($('pinImageUrl')?.value||'').trim();
+  const input=$('pinImageUrl');
+  const url=(input&&input.value||'').trim();
   if(!url){status('請先貼上 Pinterest 圖片網址。','bad');return}
   if(!/^https?:\\/\\//i.test(url)){status('圖片網址格式不正確，請貼上以 http:// 或 https:// 開頭的網址。','bad');return}
   analyzeExternalImage(url,'Pinterest 圖片',false);
@@ -483,11 +487,14 @@ function analyzeExternalImage(src,title,isLocal){
   status('已回到百日繪，正在自動分析構圖……','ok');
 }
 function pickPinterest(q){
-  $('playerBox').style.display='none';$('imageResult').style.display='block';
+  $('playerBox').style.display='none';
+  $('imageStage').style.display='block';
   let variants=['character','scene','portrait','full body','action'];
-  let extra=variants[Math.floor(Math.random()*variants.length)],searchQ=q+' '+extra;
+  let extra=variants[Math.floor(Math.random()*variants.length)];
+  let searchQ=q+' '+extra;
   let url='https://www.pinterest.com/search/pins/?q='+encodeURIComponent(searchQ);
-  lastUrl=url;showPinterestPicker(searchQ,url);
+  lastUrl=url;
+  showPinterestPicker(searchQ,url);
 }
 
 function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
