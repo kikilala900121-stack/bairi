@@ -283,6 +283,18 @@ function makePlayer(){
     playerVars:{playsinline:1,origin:location.origin,rel:0,autoplay:0},
     events:{
       onReady:function(){ready=true;if(current)load()},
+      onStateChange:function(e){
+        // PLAYING 代表指定時間的影片畫面已經真正載入。
+        // 立即暫停，讓百日繪維持在抽中的時間點。
+        if(e.data===1 && freezeAtSelectedFrame){
+          freezeAtSelectedFrame=false;
+          setTimeout(function(){
+            try{player.pauseVideo();}catch(err){}
+            if(current)$('time').textContent=fmt(current.time);
+            status('🎯 已停在抽中的時間點：'+fmt(current.time)+'｜可以開始畫了。','ok');
+          },80);
+        }
+      },
       onError:function(e){
         let msg='影片無法嵌入';
         if(e.data===101||e.data===150)msg='這部影片禁止嵌入，請再抽一次。';
@@ -294,16 +306,21 @@ function makePlayer(){
   });
 }
 
+let freezeAtSelectedFrame=false;
 function load(){
   if(!current)return;
   if(!player||!ready){
-    status('取景完成，正在載入播放器……','ok');
+    status('取景完成，正在載入選中的時間點……','ok');
     if(window.YT&&YT.Player)makePlayer();
     return;
   }
   try{
-    player.cueVideoById({videoId:current.id,startSeconds:current.time||0});
-    status('已抽到今天的場景！','ok');
+    freezeAtSelectedFrame=true;
+    // cueVideoById 只會準備影片並顯示縮圖。
+    // 這裡改成 loadVideoById，讓 YouTube 實際載入選定秒數，
+    // 在開始播放後立刻 pause，因此使用者看到的是選定時間點的影片畫面。
+    player.loadVideoById({videoId:current.id,startSeconds:current.time||0});
+    status('正在取得選中的畫面……','ok');
   }catch(e){
     status('播放器載入失敗，請重新整理頁面後再試。','bad');
   }
