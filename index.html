@@ -54,7 +54,7 @@ body.locked .wrap{user-select:none}
 <div id="status">輸入題材後選擇來源，再按「隨機取景」。</div><div id="imageStage" class="imageStage" style="display:none"><div id="imageResult"></div><canvas id="guideCanvas" aria-hidden="true"></canvas></div>
 <div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="compBtn">📐 構圖模式</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div><div class="timer"><select id="timerPreset"><option value="300">5 分鐘</option><option value="900" selected>15 分鐘</option><option value="1800">30 分鐘</option><option value="3600">60 分鐘</option></select><div><div class="timerDisplay" id="timerDisplay">15:00</div><div class="timerProgress"><i id="timerProgress"></i></div></div><div class="timerBtns"><button id="timerStart">▶ 開始</button><button id="timerReset">↺ 重設</button></div></div>
 </div>
-<div class="card"><b>📐 構圖模式</b><div class="tip">三分法、中心十字、對角線、黃金構圖。</div><div class="row" style="margin-top:9px"><select id="compType"><option value="thirds">三分法</option><option value="center">中心十字</option><option value="diagonal">對角線</option><option value="gold">黃金構圖</option></select><button id="compApply">顯示構圖線</button></div></div><div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
+<div class="card"><b>📐 AI 構圖判讀</b><div class="tip">自動分析目前畫面中的亮暗分布與主要視覺方向，推測最接近的構圖方式，再把輔助線畫上去。</div><div class="row" style="margin-top:9px"><button id="autoComp" class="primary">🔍 自動判斷構圖</button><select id="compType"><option value="thirds">三分法</option><option value="center">中心十字</option><option value="diagonal">對角線</option><option value="gold">黃金構圖</option></select><button id="compApply">手動顯示</button></div><div id="compResult" class="tip" style="margin-top:8px">尚未分析</div></div><div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
 <div class="card"><b>📅 100 日紀錄</b><div id="history" class="history">尚無紀錄</div></div>
 </div>
 <div class="lockLayer" id="lockLayer"><button class="unlock" id="unlockBtn">🔓 解鎖畫面</button></div>
@@ -124,6 +124,45 @@ catch(e){status('畫面鎖定已開啟，但瀏覽器未允許保持螢幕常亮
 async function releaseWakeLock(){
 try{if(wakeLock){await wakeLock.release();wakeLock=null}}catch(e){}
 }
+async function autoDetectComposition(){
+  const img=$('imageResult')?.querySelector('img');
+  if(!img){$('compResult').textContent='目前沒有可分析的劇照。';return}
+  if(!img.complete||!img.naturalWidth){$('compResult').textContent='圖片尚未載入完成，請稍候再試。';return}
+  $('compResult').textContent='正在分析畫面……';
+  try{
+    const cv=document.createElement('canvas'),ctx=cv.getContext('2d',{willReadFrequently:true});
+    const W=120,H=80;cv.width=W;cv.height=H;
+    ctx.drawImage(img,0,0,W,H);
+    const d=ctx.getImageData(0,0,W,H).data;
+    const lum=new Float32Array(W*H);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){let p=(y*W+x)*4;lum[y*W+x]=.2126*d[p]+.7152*d[p+1]+.0722*d[p+2]}
+    const col=[],row=[];
+    for(let x=0;x<W;x++){let s=0;for(let y=0;y<H;y++)s+=lum[y*W+x];col[x]=s/H}
+    for(let y=0;y<H;y++){let s=0;for(let x=0;x<W;x++)s+=lum[y*W+x];row[y]=s/W}
+    function mean(a,s,e){let z=0,n=0;for(let i=s;i<e;i++){z+=a[i];n++}return z/n}
+    function variance(a){let m=mean(a,0,a.length),v=0;for(let i=0;i<a.length;i++)v+=(a[i]-m)*(a[i]-m);return v/a.length}
+    function peak(a){let m=mean(a,0,a.length),best=-1,bi=0;for(let i=0;i<a.length;i++){let z=Math.abs(a[i]-m);if(z>best){best=z;bi=i}}return bi/a.length}
+    let vx=variance(col),vy=variance(row),px=peak(col),py=peak(row);
+    let diag=0,anti=0;
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
+      let gx=Math.abs(lum[y*W+x+1]-lum[y*W+x-1]),gy=Math.abs(lum[(y+1)*W+x]-lum[(y-1)*W+x]);
+      if(Math.abs(gx-gy)>18){ if((x/W)>(y/H))diag+=Math.abs(gx-gy); else anti+=Math.abs(gx-gy); }
+    }
+    let edge=Math.sqrt(vx+vy),type='thirds',reason='畫面明暗重心接近三分線';
+    if(Math.abs(px-.5)<.11 && Math.abs(py-.5)<.11 && edge<55){type='center';reason='主要明暗分布集中在畫面中央'}
+    else if(Math.max(diag,anti)>edge*1.35){type='diagonal';reason='畫面邊緣方向性較強，呈現明顯斜向結構'}
+    else if(Math.abs(px-.382)<.16 || Math.abs(px-.618)<.16 || Math.abs(py-.382)<.16 || Math.abs(py-.618)<.16){type='gold';reason='主要視覺重心接近黃金分割區域'}
+    $('compType').value=type;
+    $('compOverlay').className='compOverlay '+type+' show';
+    $('compBtn').textContent='📐 關閉構圖';
+    drawGuides();
+    const names={thirds:'三分法',center:'中心構圖',diagonal:'對角線構圖',gold:'黃金構圖'};
+    $('compResult').textContent='🔍 判定：'+names[type]+'｜'+reason+'（啟發式分析，並非真正的人眼語意判讀）';
+  }catch(e){
+    console.error(e);$('compResult').textContent='無法分析這張圖片；可以改用手動構圖。';
+  }
+}
+
 function drawGuides(){
   const canvas=$('guideCanvas'),stage=$('imageStage'),img=$('imageResult')?.querySelector('img');
   if(!canvas||!stage||!img||stage.style.display==='none'||!img.naturalWidth){return}
@@ -149,6 +188,7 @@ document.body.classList.toggle('locked',on);
 if(on){requestWakeLock();status('🔒 畫面已鎖定：可專心作畫。點右上角「解鎖畫面」返回操作。','ok')}
 else releaseWakeLock();
 }
+$('autoComp').onclick=autoDetectComposition;
 $('compApply').onclick=function(){let o=$('compOverlay');o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖';drawGuides()};
 $('compBtn').onclick=function(){let o=$('compOverlay');if(o.classList.contains('show')){o.classList.remove('show');$('compBtn').textContent='📐 構圖模式'}else{o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖'}drawGuides()};
 $('gridBtn').onclick=function(){$('grid9').classList.toggle('show');$('gridBtn').textContent=$('grid9').classList.contains('show')?'▦ 關閉九宮格':'▦ 九宮格';drawGuides()};
