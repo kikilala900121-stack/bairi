@@ -790,7 +790,7 @@ loadToday();
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('install').classList.add('show')});
 $('install').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;$('install').classList.remove('show')}else alert('請使用 Chrome 選單 →「新增至主畫面」或「安裝應用程式」。')};
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw-v3.js?v=20260930').catch(()=>{});
 </script>
 <script>
 (function(){
