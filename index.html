@@ -43,16 +43,15 @@ body.locked .wrap{user-select:none}
 <option value="scene">一般場景</option><option value="drama">劇情片段</option><option value="action">動作場景</option>
 <option value="portrait">人物特寫</option><option value="fullbody">全身人物</option><option value="anime">動畫角色</option>
 </select>
-<button class="primary" id="pick">🎲 隨機取景</button>
+<select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="google">🖼️ Google 圖片</option><option value="pinterest">📌 Pinterest</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
 <button id="install" class="install">＋ 加到主畫面</button>
 </div>
-<div style="margin-top:9px"><input id="apiKey" type="password" placeholder="第一次使用：輸入 YouTube Data API v3 Key"></div>
-<small>API Key 只儲存在本機瀏覽器。</small>
+<div style="margin-top:9px"><input id="apiKey" type="password" placeholder="YouTube Data API v3 Key（YouTube 才需要）"></div><div class="row" style="margin-top:8px"><input id="googleKey" type="password" placeholder="Google Custom Search API Key（Google 圖片才需要）"><input id="googleCx" placeholder="Google 圖片搜尋引擎 ID（CX）"></div><small>API Key / CX 只儲存在本機瀏覽器。</small>
 </div>
 <div class="card">
 <div id="playerBox"><div id="player"></div><div id="grid9" class="grid9" aria-hidden="true"></div><div id="compOverlay" class="compOverlay" aria-hidden="true"></div></div>
 <div class="grid"><div><b id="title">尚未抽取</b><div><small id="meta"></small></div></div><div class="time" id="time">--:--</div></div>
-<div id="status">輸入題材後按「隨機取景」。</div>
+<div id="status">輸入題材後選擇來源，再按「隨機取景」。</div><div id="imageResult" style="display:none;margin-top:12px"></div>
 <div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="compBtn">📐 構圖模式</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div><div class="timer"><select id="timerPreset"><option value="300">5 分鐘</option><option value="900" selected>15 分鐘</option><option value="1800">30 分鐘</option><option value="3600">60 分鐘</option></select><div><div class="timerDisplay" id="timerDisplay">15:00</div><div class="timerProgress"><i id="timerProgress"></i></div></div><div class="timerBtns"><button id="timerStart">▶ 開始</button><button id="timerReset">↺ 重設</button></div></div>
 </div>
 <div class="card"><b>📐 構圖模式</b><div class="tip">三分法、中心十字、對角線、黃金構圖。</div><div class="row" style="margin-top:9px"><select id="compType"><option value="thirds">三分法</option><option value="center">中心十字</option><option value="diagonal">對角線</option><option value="gold">黃金構圖</option></select><button id="compApply">顯示構圖線</button></div></div><div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
@@ -70,7 +69,7 @@ function history(){
 let h=getHistory(),today=new Date().toLocaleDateString('zh-TW');
 $('history').innerHTML=h.length?h.slice().reverse().map(function(x,i){
 let dayNo=h.length-i,can=!!x.id;
-return '<button class="'+(x.d===today?'currentDay':'')+'" '+(can?'onclick="loadDay('+dayNo+')"':'')+'>'+dayNo+'. '+esc(x.d)+'｜'+esc(x.t)+'｜'+fmt(x.s)+(can?'':'｜舊紀錄需重新抽取')+'</button>';
+return '<button class="'+(x.d===today?'currentDay':'')+'" '+(can?'onclick="loadDay('+dayNo+')"':'')+'>'+dayNo+'. '+esc(x.d)+'｜'+esc(x.source||'youtube')+'｜'+esc(x.t)+'｜'+(x.source==='google'?'圖片':x.source==='pinterest'?'Pinterest':fmt(x.s))+(can?'':'｜舊紀錄需重新抽取')+'</button>';
 }).join(''):'尚無紀錄';
 $('day').textContent='第 '+Math.min(h.length+1,100)+' / 100 天';
 }
@@ -78,7 +77,10 @@ function loadDay(dayNo){
 let h=getHistory(),idx=h.length-dayNo;
 if(idx<0)return;
 let x=h[idx];
-if(!x||!x.id){status('這筆是舊版紀錄，沒有保存影片 ID；請重新抽取後才可回到該圖。','bad');return}
+if(!x){return}
+if(x.source==='google'&&x.image){current=null;$('playerBox').style.display='none';$('imageResult').style.display='block';$('title').textContent=x.t||'Google 圖片';$('meta').textContent='Google 圖片｜'+(x.query||'');$('time').textContent='圖片';$('imageResult').innerHTML='<a href="'+escAttr(x.original||x.image)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.image)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a>';status('已回到第 '+dayNo+' 天的 Google 圖片。','ok');return}
+if(x.source==='pinterest'){current=null;$('playerBox').style.display='none';$('imageResult').style.display='block';$('title').textContent=x.t||'Pinterest';$('meta').textContent='Pinterest｜'+(x.query||'');$('time').textContent='Pinterest';$('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest 靈感搜尋</b><p class="tip">點擊下方按鈕回到當天的 Pinterest 搜尋。</p><button class="primary" onclick="window.open(\''+escAttr(x.original||'https://www.pinterest.com/search/pins/?q='+encodeURIComponent(x.query||''))+'\',\'_blank\',\'noopener\')">開啟 Pinterest</button></div>';status('已回到第 '+dayNo+' 天的 Pinterest 靈感。','ok');return}
+if(!x.id){status('這筆是舊版紀錄，沒有保存影片 ID；請重新抽取後才可回到該圖。','bad');return}
 current={id:x.id,title:x.t||'',time:x.s||0,duration:x.duration||0};
 lastUrl='https://www.youtube.com/watch?v='+x.id+'&t='+x.s+'s';
 $('title').textContent=current.title;
@@ -91,7 +93,7 @@ status('已回到第 '+dayNo+' 天的取景。按「🔒 鎖定畫面」即可�
 }
 function saveToday(x){
 let h=getHistory(),d=new Date().toLocaleDateString('zh-TW');
-let item={d:d,t:x.title,s:x.time,id:x.id,duration:x.duration,query:$('query').value.trim(),scene:$('sceneType').value};
+let item={d:d,t:x.title,s:x.time,id:x.id||'',duration:x.duration||0,source:x.source||'youtube',image:x.image||'',original:x.original||'',query:x.query||$('query').value.trim(),scene:x.scene||$('sceneType').value};
 let i=h.findIndex(function(v){return v.d===d});
 if(i>=0)h[i]=item;else h.push(item);
 localStorage.setItem('brh',JSON.stringify(h.slice(-100)));history();
@@ -191,44 +193,49 @@ function getHistory(){
 }
 
 async function pick(){
-  let key=$('apiKey').value.trim();
-  if(!key){
-    status('請先輸入 YouTube Data API v3 Key。','bad');
-    $('apiKey').focus();
-    return;
-  }
-  localStorage.setItem('ytk',key);
   let q=$('query').value.trim();
-  if(!q){
-    status('請先輸入想畫的題材，例如：哈利波特、日劇、漫威。','bad');
-    $('query').focus();
-    return;
+  if(!q){status('請先輸入想畫的題材，例如：哈利波特、日劇、漫威。','bad');$('query').focus();return}
+
+  let source=$('sourceType').value;
+  if(source==='all'){
+    let choices=['youtube','google','pinterest'];
+    source=choices[Math.floor(Math.random()*choices.length)];
   }
+
+  if(source==='youtube'){
+    return pickYouTube(q);
+  }
+  if(source==='google'){
+    return pickGoogleImage(q);
+  }
+  if(source==='pinterest'){
+    return pickPinterest(q);
+  }
+}
+
+async function pickYouTube(q){
+  let key=$('apiKey').value.trim();
+  if(!key){status('請先輸入 YouTube Data API v3 Key。','bad');$('apiKey').focus();return}
+  localStorage.setItem('ytk',key);
+
   let today=new Date().toLocaleDateString('zh-TW');
   let todayRecord=getHistory().find(function(x){return x.d===today});
-  if(todayRecord&&todayRecord.id){
-    status('今天已經抽過題目了；明天再抽新題。','bad');
-    return;
+  if(todayRecord&&todayRecord.source==='youtube'&&todayRecord.id){
+    status('今天已經有 YouTube 題目了；明天再抽新題。','bad');return;
   }
 
   let type=$('sceneType').value;
-  let suffix={
-    scene:'',
-    drama:' 劇情片段',
-    action:' 動作場景',
-    portrait:' 人物特寫',
-    fullbody:' 全身人物',
-    anime:' 動畫角色'
-  }[type]||'';
+  let suffix={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
   let searchQ=q+suffix;
-
+  $('imageResult').style.display='none';
+  $('playerBox').style.display='block';
   status('正在搜尋 YouTube……','ok');
+
   try{
     let searchUrl='https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&safeSearch=moderate&maxResults=20&q='+encodeURIComponent(searchQ)+'&key='+encodeURIComponent(key);
-    let sr=await fetch(searchUrl);
-    let sj=await sr.json();
+    let sr=await fetch(searchUrl),sj=await sr.json();
     if(!sr.ok)throw new Error(sj.error&&sj.error.message?sj.error.message:'YouTube 搜尋失敗');
-    let ids=(sj.items||[]).map(function(x){return x.id&&x.id.videoId}).filter(Boolean);
+    let ids=(sj.items||[]).map(x=>x.id&&x.id.videoId).filter(Boolean);
     if(!ids.length){status('找不到符合條件的 YouTube 影片，請換一個題材。','bad');return}
 
     let vr=await fetch('https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id='+ids.map(encodeURIComponent).join(',')+'&key='+encodeURIComponent(key));
@@ -237,30 +244,63 @@ async function pick(){
 
     let candidates=(vj.items||[]).map(function(v){
       let m=(v.contentDetails.duration||'').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-      let sec=(m?((Number(m[1]||0)*3600)+(Number(m[2]||0)*60)+Number(m[3]||0)):0);
+      let sec=m?((Number(m[1]||0)*3600)+(Number(m[2]||0)*60)+Number(m[3]||0)):0;
       return {id:v.id,title:v.snippet&&v.snippet.title||'',duration:sec};
-    }).filter(function(v){return v.duration>=30});
-
+    }).filter(v=>v.duration>=30);
     if(!candidates.length){status('找到的影片都太短，請換題材再試。','bad');return}
 
     let x=candidates[Math.floor(Math.random()*candidates.length)];
-    let min=Math.max(5,Math.floor(x.duration*0.12));
-    let max=Math.max(min,Math.floor(x.duration*0.88));
-    x.time=min+Math.floor(Math.random()*(max-min+1));
-    x.query=q;x.scene=type;
-    current=x;
-    lastUrl='https://www.youtube.com/watch?v='+x.id+'&t='+x.time+'s';
-    $('title').textContent=x.title;
-    $('meta').textContent=q+'｜影片長度 '+fmt(x.duration);
-    $('time').textContent=fmt(x.time);
-    saveToday(x);
-    status('已抽到今天的場景！正在載入影片……','ok');
-    load();
-  }catch(e){
-    console.error(e);
-    status('隨機抽取失敗：'+(e.message||'未知錯誤')+'\n請確認 API Key 有啟用 YouTube Data API v3。','bad');
-  }
+    let min=Math.max(5,Math.floor(x.duration*0.12)),max=Math.max(min,Math.floor(x.duration*0.88));
+    x.time=min+Math.floor(Math.random()*(max-min+1));x.query=q;x.scene=type;x.source='youtube';
+    current=x;lastUrl='https://www.youtube.com/watch?v='+x.id+'&t='+x.time+'s';
+    $('title').textContent=x.title;$('meta').textContent='YouTube｜'+q+'｜影片長度 '+fmt(x.duration);$('time').textContent=fmt(x.time);
+    saveToday(x);status('已抽到 YouTube 場景！正在載入影片……','ok');load();
+  }catch(e){console.error(e);status('YouTube 抽取失敗：'+(e.message||'未知錯誤')+'\n請確認 API Key 有啟用 YouTube Data API v3。','bad')}
 }
+
+async function pickGoogleImage(q){
+  let key=$('googleKey').value.trim(),cx=$('googleCx').value.trim();
+  if(!key||!cx){status('Google 圖片需要 Google Custom Search API Key 與搜尋引擎 ID（CX）。','bad');return}
+  localStorage.setItem('gk',key);localStorage.setItem('gcx',cx);
+  $('playerBox').style.display='none';$('imageResult').style.display='block';
+  status('正在搜尋 Google 圖片……','ok');
+
+  try{
+    let url='https://www.googleapis.com/customsearch/v1?key='+encodeURIComponent(key)+'&cx='+encodeURIComponent(cx)+'&searchType=image&num=10&q='+encodeURIComponent(q);
+    let r=await fetch(url),j=await r.json();
+    if(!r.ok)throw new Error(j.error&&j.error.message?j.error.message:'Google 圖片搜尋失敗');
+    let items=(j.items||[]).filter(x=>x.link);
+    if(!items.length){status('找不到 Google 圖片結果，請換一個題材。','bad');return}
+    let x=items[Math.floor(Math.random()*items.length)];
+    let day=new Date().toLocaleDateString('zh-TW');
+    let item={d:day,t:x.title||q,s:0,source:'google',image:x.link,original:x.image&&x.image.contextLink||x.link,query:q,scene:$('sceneType').value};
+    let h=getHistory(),i=h.findIndex(v=>v.d===day);if(i>=0)h[i]=item;else h.push(item);localStorage.setItem('brh',JSON.stringify(h.slice(-100)));history();
+    current=null;lastUrl=item.original;
+    $('title').textContent=item.t;$('meta').textContent='Google 圖片｜'+q;
+    $('time').textContent='圖片';
+    $('imageResult').innerHTML='<a href="'+escAttr(item.original)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.link)+'" alt="'+escAttr(x.title||q)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a><div class="tip" style="margin-top:8px">點圖片可開啟原始來源。</div>';
+    status('已抽到 Google 圖片！','ok');
+  }catch(e){console.error(e);status('Google 圖片抽取失敗：'+(e.message||'未知錯誤')+'\n請確認 Custom Search API 與 CX 設定正確。','bad')}
+}
+
+function pickPinterest(q){
+  $('playerBox').style.display='none';$('imageResult').style.display='block';
+  let variants=['character','scene','portrait','full body','action'];
+  let extra=variants[Math.floor(Math.random()*variants.length)];
+  let searchQ=q+' '+extra;
+  let url='https://www.pinterest.com/search/pins/?q='+encodeURIComponent(searchQ);
+  lastUrl=url;
+  current=null;
+  $('title').textContent='Pinterest｜'+searchQ;
+  $('meta').textContent='隨機搜尋靈感';
+  $('time').textContent='Pinterest';
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest 靈感搜尋</b><p class="tip">Pinterest 不提供適合直接放在 GitHub Pages 前端隨機抓圖的公開搜尋介面，因此這裡會隨機組合搜尋詞並開啟 Pinterest 搜尋結果。</p><button class="primary" onclick="window.open(\''+escAttr(url)+'\',\'_blank\',\'noopener\')">開啟 Pinterest 搜尋</button></div>';
+  saveToday({title:'Pinterest｜'+searchQ,time:0,duration:0,id:'',source:'pinterest',query:q,scene:$('sceneType').value,original:url});
+  status('已產生 Pinterest 隨機靈感搜尋。','ok');
+}
+
+function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
 
 $('pick').onclick=pick;
 $('again').onclick=function(){
@@ -273,7 +313,7 @@ return;
 pick();
 };
 $('open').onclick=function(){if(lastUrl)location.href=lastUrl};
-$('apiKey').value=localStorage.getItem('ytk')||'';
+$('apiKey').value=localStorage.getItem('ytk')||'';$('googleKey').value=localStorage.getItem('gk')||'';$('googleCx').value=localStorage.getItem('gcx')||'';
 history();
 loadToday();
 let deferredPrompt;
