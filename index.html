@@ -79,7 +79,7 @@ if(idx<0)return;
 let x=h[idx];
 if(!x){return}
 if((x.source==='tvmaze'||x.source==='commons'||x.source==='google')&&x.image){current=null;$('playerBox').style.display='none';$('imageStage').style.display='block';$('title').textContent=x.t||'網路圖片';$('meta').textContent=(x.source==='google'?'舊版 Google 圖片':(x.source==='tvmaze'?'TVmaze 影視劇照':'Wikimedia Commons 圖片'))+'｜'+(x.query||'');$('time').textContent='圖片';$('imageResult').innerHTML='<a href="'+escAttr(x.original||x.image)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.image)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a>';const im=$('imageResult').querySelector('img');if(im)im.onload=drawGuides;drawGuides();status('已回到第 '+dayNo+' 天的圖片。','ok');return}
-if(x.source==='pinterest-image'&&x.image){analyzeExternalImage(x.image,x.t||'Pinterest 圖片',x.image.startsWith('data:image/'));return}
+if(x.source==='pinterest-image'&&(x.original||x.image)){analyzeExternalImage(x.original||x.image,x.t||'Pinterest 圖片',String(x.image||'').startsWith('data:image/'),x.original||'');return}
 if(x.source==='pinterest'){current=null;$('playerBox').style.display='none';$('imageStage').style.display='block';$('title').textContent=x.t||'Pinterest';$('meta').textContent='Pinterest｜'+(x.query||'');$('time').textContent='Pinterest';$('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest 靈感搜尋</b><p class="tip">點擊下方按鈕回到當天的 Pinterest 搜尋。</p><button class="primary" onclick="showPinterestPicker(\''+escAttr((x.t||'Pinterest').replace(/^Pinterest｜/,''))+'\',\''+escAttr(x.original||'https://www.pinterest.com/search/pins/?q='+encodeURIComponent(x.query||''))+'\')">開啟 Pinterest 選圖</button></div>';status('已回到第 '+dayNo+' 天的 Pinterest 靈感。','ok');return}
 if(!x.id){status('這筆是舊版紀錄，沒有保存影片 ID；請重新抽取後才可回到該圖。','bad');return}
 current={id:x.id,title:x.t||'',time:x.s||0,duration:x.duration||0};
@@ -501,43 +501,66 @@ function analyzePinterestFile(file){
   if(!file.type||!file.type.startsWith('image/')){status('請選擇 JPG、PNG、WEBP 等圖片檔。','bad');return}
   const reader=new FileReader();
   reader.onload=function(){analyzeExternalImage(reader.result,'Pinterest 選取圖片',true)};
-  reader.onerror=function(){status('圖片讀取失敗，請重新選取。','bad')};
-  reader.readAsDataURL(file);
-}
-function analyzeExternalImage(src,title,isLocal,sourceUrl){
-  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=sourceUrl||(!isLocal?src:'');
-  $('title').textContent=title;$('meta').textContent='已回到百日繪｜可自動分析構圖';$('time').textContent='圖片';
-
-  const candidates=isLocal?[src]:[
-    src,
-    'https://images.weserv.nl/?url='+encodeURIComponent(src),
-    'https://wsrv.nl/?url='+encodeURIComponent(src)
+  reader.onerror=function(){status('圖片讀async function fetchImageData(src){
+  const attempts=[
+    {url:src,mode:'blob'},
+    {url:'https://wsrv.nl/?url='+encodeURIComponent(src)+'&output=jpg&encoding=base64',mode:'text'},
+    {url:'https://images.weserv.nl/?url='+encodeURIComponent(src)+'&output=jpg&encoding=base64',mode:'text'}
   ];
-  let idx=0;
-  $('imageResult').innerHTML='<img id="externalPinImage" alt="'+escAttr(title)+'" referrerpolicy="no-referrer" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div id="pinLoadTip" class="tip" style="margin-top:8px">正在載入 Pinterest 圖片……</div>';
-  const im=$('imageResult').querySelector('img');
-  const tip=$('pinLoadTip');
-
-  function tryNext(){
-    if(idx>=candidates.length){
-      if(tip)tip.textContent='圖片伺服器拒絕外部載入。請改用「📱 選取手機圖片」，或重新貼一次 Pin 網址。';
-      status('Pinterest 圖片載入失敗，請改用「📱 選取手機圖片」。','bad');
-      return;
-    }
-    const url=candidates[idx++];
-    if(tip)tip.textContent='正在嘗試第 '+idx+' 種圖片載入方式……';
-    im.onerror=tryNext;
-    im.onload=function(){
-      if(tip)tip.textContent='圖片已載入，正在自動分析構圖……';
-      drawGuides();
-      autoDetectComposition();
-    };
-    im.src=url;
+  let lastError=null;
+  for(const a of attempts){
+    try{
+      const r=await fetch(a.url,{mode:'cors',cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      if(a.mode==='text'){
+        const data=(await r.text()).trim();
+        if(/^data:image\//i.test(data))return data;
+        const m=data.match(/data:image\/[^"']+/i);
+        if(m)return m[0];
+        throw new Error('沒有收到圖片資料');
+      }
+      const blob=await r.blob();
+      if(!blob.type||!blob.type.startsWith('image/'))throw new Error('回傳內容不是圖片');
+      return await new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>reject(new Error('圖片轉換失敗'));
+        reader.readAsDataURL(blob);
+      });
+    }catch(e){lastError=e}
   }
+  throw lastError||new Error('圖片下載失敗');
+}
 
-  if(im)tryNext();
+async function analyzeExternalImage(src,title,isLocal,sourceUrl){
+  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=sourceUrl||(!isLocal?src:'');
+  $('title').textContent=title;$('meta').textContent='正在把圖片下載到瀏覽器內……';$('time').textContent='圖片';
+  $('imageResult').innerHTML='<div class="tip" id="pinLoadTip">正在從 Pinterest 取得圖片資料……</div>';
+  const tip=$('pinLoadTip');
+  try{
+    let dataUrl;
+    if(isLocal && /^data:image\//i.test(src))dataUrl=src;
+    else dataUrl=await fetchImageData(src);
 
-  saveToday({title:title,time:0,duration:0,id:'',source:'pinterest-image',query:$('query').value.trim(),scene:$('sceneType').value,image:src,original:sourceUrl||(!isLocal?src:'')});
+    $('meta').textContent='圖片已下載到瀏覽器｜可自動分析構圖';
+    $('imageResult').innerHTML='<img id="externalPinImage" alt="'+escAttr(title)+'" referrerpolicy="no-referrer" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div id="pinLoadTip" class="tip" style="margin-top:8px">圖片已轉成瀏覽器內資料，正在分析構圖……</div>';
+    const im=$('imageResult').querySelector('img');
+    im.onload=function(){drawGuides();autoDetectComposition()};
+    im.src=dataUrl;
+
+    saveToday({
+      title:title,time:0,duration:0,id:'',source:'pinterest-image',
+      query:$('query').value.trim(),scene:$('sceneType').value,
+      image:'',original:sourceUrl||src
+    });
+    status('✅ Pinterest 圖片已下載到瀏覽器內，正在分析構圖……','ok');
+  }catch(e){
+    console.error(e);
+    if(tip)tip.textContent='圖片下載失敗。';
+    $('meta').textContent='無法取得圖片資料';
+    status('Pinterest 圖片下載失敗。百日繪已嘗試直接下載與圖片轉送服務；請重新貼一次 Pin 網址。','bad');
+  }
+}c:'')});
   status('正在載入 Pinterest 圖片並分析構圖……','ok');
 }
 
