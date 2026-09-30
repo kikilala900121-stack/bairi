@@ -43,7 +43,7 @@ body.locked .wrap{user-select:none}
 <option value="scene">一般場景</option><option value="drama">劇情片段</option><option value="action">動作場景</option>
 <option value="portrait">人物特寫</option><option value="fullbody">全身人物</option><option value="anime">動畫角色</option>
 </select>
-<select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="commons">🖼️ 網路圖片</option><option value="pinterest">📌 Pinterest</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
+<select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="tvmaze">🎞️ 影視劇照</option><option value="pinterest">📌 Pinterest</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
 <button id="install" class="install">＋ 加到主畫面</button>
 </div>
 <div style="margin-top:9px"><input id="apiKey" type="password" placeholder="YouTube Data API v3 Key（YouTube 才需要）"></div><div style="margin-top:8px;padding:10px 12px;background:#151515;border:1px solid #333;border-radius:12px;color:#bbb">🖼️ <b>網路圖片</b>：改用 Wikimedia Commons 公開圖片搜尋，不需要 Google API Key 或 CX；搜尋結果會直接顯示可用圖片。</div>
@@ -78,7 +78,7 @@ let h=getHistory(),idx=h.length-dayNo;
 if(idx<0)return;
 let x=h[idx];
 if(!x){return}
-if((x.source==='commons'||x.source==='google')&&x.image){current=null;$('playerBox').style.display='none';$('imageResult').style.display='block';$('title').textContent=x.t||'網路圖片';$('meta').textContent=(x.source==='google'?'舊版 Google 圖片':'Wikimedia Commons 圖片')+'｜'+(x.query||'');$('time').textContent='圖片';$('imageResult').innerHTML='<a href="'+escAttr(x.original||x.image)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.image)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a>';status('已回到第 '+dayNo+' 天的圖片。','ok');return}
+if((x.source==='tvmaze'||x.source==='commons'||x.source==='google')&&x.image){current=null;$('playerBox').style.display='none';$('imageResult').style.display='block';$('title').textContent=x.t||'網路圖片';$('meta').textContent=(x.source==='google'?'舊版 Google 圖片':(x.source==='tvmaze'?'TVmaze 影視劇照':'Wikimedia Commons 圖片'))+'｜'+(x.query||'');$('time').textContent='圖片';$('imageResult').innerHTML='<a href="'+escAttr(x.original||x.image)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.image)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a>';status('已回到第 '+dayNo+' 天的圖片。','ok');return}
 if(x.source==='pinterest'){current=null;$('playerBox').style.display='none';$('imageResult').style.display='block';$('title').textContent=x.t||'Pinterest';$('meta').textContent='Pinterest｜'+(x.query||'');$('time').textContent='Pinterest';$('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest 靈感搜尋</b><p class="tip">點擊下方按鈕回到當天的 Pinterest 搜尋。</p><button class="primary" onclick="window.open(\''+escAttr(x.original||'https://www.pinterest.com/search/pins/?q='+encodeURIComponent(x.query||''))+'\',\'_blank\',\'noopener\')">開啟 Pinterest</button></div>';status('已回到第 '+dayNo+' 天的 Pinterest 靈感。','ok');return}
 if(!x.id){status('這筆是舊版紀錄，沒有保存影片 ID；請重新抽取後才可回到該圖。','bad');return}
 current={id:x.id,title:x.t||'',time:x.s||0,duration:x.duration||0};
@@ -198,15 +198,15 @@ async function pick(){
 
   let source=$('sourceType').value;
   if(source==='all'){
-    let choices=['youtube','commons','pinterest'];
+    let choices=['youtube','tvmaze','pinterest'];
     source=choices[Math.floor(Math.random()*choices.length)];
   }
 
   if(source==='youtube'){
     return pickYouTube(q);
   }
-  if(source==='commons'){
-    return pickCommonsImage(q);
+  if(source==='tvmaze'){
+    return pickTVMazeImage(q);
   }
   if(source==='pinterest'){
     return pickPinterest(q);
@@ -258,63 +258,70 @@ async function pickYouTube(q){
   }catch(e){console.error(e);status('YouTube 抽取失敗：'+(e.message||'未知錯誤')+'\n請確認 API Key 有啟用 YouTube Data API v3。','bad')}
 }
 
-async function pickCommonsImage(q){
+async function pickTVMazeImage(q){
   $('playerBox').style.display='none';
   $('imageResult').style.display='block';
-  status('正在搜尋網路圖片……','ok');
+  status('正在搜尋影視劇照……','ok');
 
   let type=$('sceneType').value;
-  let suffix={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物 特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
-  let searchQ=(q+suffix).trim();
+  let suffix={scene:'',drama:'',action:'',portrait:'',fullbody:'',anime:''}[type]||'';
 
   try{
-    let api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=30&gsrsearch='+encodeURIComponent(searchQ)+'&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=1400&format=json&origin=*';
-    let r=await fetch(api);
-    let j=await r.json();
-    if(!r.ok)throw new Error('Wikimedia Commons 搜尋失敗');
-    let pages=j.query&&j.query.pages?Object.values(j.query.pages):[];
-    let items=pages.map(function(p){
-      let info=p.imageinfo&&p.imageinfo[0];
-      if(!info)return null;
-      let mime=info.mime||'';
-      let image=info.thumburl||info.url||'';
-      if(!image||mime.indexOf('image/')!==0)return null;
-      return {
-        title:(p.title||'').replace(/^File:/,''),
-        image:image,
-        original:info.descriptionurl||('https://commons.wikimedia.org/wiki/'+encodeURIComponent(p.title||'')),
-        pageid:p.pageid||0
-      };
-    }).filter(Boolean);
+    let searchTerms=[q];
+    let aliases={
+      '日劇':['Japanese drama','Japan drama'],
+      '日劇片段':['Japanese drama','Japan drama'],
+      '韓劇':['Korean drama','Korean'],
+      '動畫':['anime'],
+      '動漫':['anime'],
+      '美劇':['American drama','US drama']
+    };
+    if(aliases[q]) searchTerms=searchTerms.concat(aliases[q]);
 
-    if(!items.length){
-      let fallback='https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search='+encodeURIComponent(searchQ);
-      current=null;lastUrl=fallback;
-      $('title').textContent='找不到直接圖片';
-      $('meta').textContent='Wikimedia Commons 搜尋｜'+searchQ;
-      $('time').textContent='搜尋';
-      $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🖼️ 沒有找到可直接顯示的圖片</b><p class="tip">可以改用較具體的角色、作品名稱，或開啟 Commons 圖片搜尋。</p><button class="primary" onclick="window.open(\''+escAttr(fallback)+'\',\'_blank\',\'noopener\')">開啟圖片搜尋</button></div>';
-      status('目前沒有找到圖片，換一個題材再試。','bad');
-      return;
+    let shows=[];
+    for(let term of searchTerms){
+      let sr=await fetch('https://api.tvmaze.com/search/shows?q='+encodeURIComponent(term));
+      if(!sr.ok)continue;
+      let sj=await sr.json();
+      shows=shows.concat((sj||[]).map(x=>x.show).filter(Boolean));
     }
 
-    let x=items[Math.floor(Math.random()*items.length)];
+    let seen={};
+    shows=shows.filter(s=>{if(seen[s.id])return false;seen[s.id]=1;return true;});
+
+    if(!shows.length){
+      throw new Error('TVmaze 找不到這個影視作品');
+    }
+
+    let show=shows[Math.floor(Math.random()*Math.min(shows.length,10))];
+    let er=await fetch('https://api.tvmaze.com/shows/'+show.id+'/episodes?specials=1');
+    if(!er.ok)throw new Error('無法取得劇集資料');
+    let episodes=await er.json();
+
+    let items=(episodes||[]).filter(ep=>ep.image&&(ep.image.original||ep.image.medium));
+    if(!items.length)throw new Error('這部作品目前沒有可用劇照');
+
+    let ep=items[Math.floor(Math.random()*items.length)];
+    let image=(ep.image.original||ep.image.medium);
+    let title=(show.name||q)+'｜'+(ep.name||('第 '+(ep.number||'?')+' 集'));
+    let original=ep.url||show.url||('https://www.tvmaze.com/shows/'+show.id);
+
     let day=new Date().toLocaleDateString('zh-TW');
-    let item={d:day,t:x.title,s:0,source:'commons',image:x.image,original:x.original,query:q,scene:type};
+    let item={d:day,t:title,s:0,source:'tvmaze',image:image,original:original,query:q,scene:type,showId:show.id,episodeId:ep.id};
     let h=getHistory(),i=h.findIndex(v=>v.d===day);
     if(i>=0)h[i]=item;else h.push(item);
     localStorage.setItem('brh',JSON.stringify(h.slice(-100)));
     history();
 
-    current=null;lastUrl=x.original;
-    $('title').textContent=x.title;
-    $('meta').textContent='Wikimedia Commons｜'+q+'｜公開圖片';
-    $('time').textContent='圖片';
-    $('imageResult').innerHTML='<a href="'+escAttr(x.original)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.image)+'" alt="'+escAttr(x.title||q)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a><div class="tip" style="margin-top:8px">圖片來自 Wikimedia Commons；點圖片可查看原始檔案頁與授權資訊。</div>';
-    status('已抽到網路圖片！','ok');
+    current=null;lastUrl=original;
+    $('title').textContent=title;
+    $('meta').textContent='TVmaze 影視劇照｜'+(show.name||q)+(ep.season?'｜S'+ep.season+'E'+ep.number:'');
+    $('time').textContent='劇照';
+    $('imageResult').innerHTML='<a href="'+escAttr(original)+'" target="_blank" rel="noopener"><img src="'+escAttr(image)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a><div class="tip" style="margin-top:8px">劇照來自 TVmaze 的劇集圖片資料；點圖片可查看作品／劇集資訊。</div>';
+    status('已抽到影視劇照！','ok');
   }catch(e){
     console.error(e);
-    status('網路圖片抽取失敗：'+(e.message||'未知錯誤')+'\\n請稍後再試或換一個題材。','bad');
+    status('影視劇照抽取失敗：'+(e.message||'未知錯誤')+'\\n請輸入具體作品名稱，例如：First Love、Breaking Bad、鬼滅之刃。','bad');
   }
 }
 
