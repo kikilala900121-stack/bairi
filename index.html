@@ -643,8 +643,15 @@ function showGoogleImagePicker(searchQ,url){
   $('title').textContent='Google 圖片｜'+searchQ;
   $('meta').textContent='先在 Google 圖片選圖，再回百日繪分析';
   $('time').textContent='Google';
-  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🔎 Google 圖片 → 百日繪</b><p class="tip">先開啟 Google 圖片搜尋，選一張想畫的圖。回來後可貼「圖片網址」；如果不方便取得網址，也可以直接從手機選取圖片。</p><div class="row" style="margin-top:10px"><button class="primary" id="googleOpenBtn">🔎 開啟 Google 圖片搜尋</button></div><div style="margin-top:14px"><input id="googleImageUrl" placeholder="貼上 Google 圖片中的圖片網址" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="googleAnalyzeUrlBtn">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="googleImageFile" type="file" accept="image/*" style="display:none"></label></div></div>';
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🔎 Google 圖片 → 百日繪</b><p class="tip">先開啟 Google 圖片搜尋，選一張想畫的圖。回來後可貼「圖片網址」；如果不方便取得網址，也可以直接從手機選取圖片。</p><div class="row" style="margin-top:10px"><button class="primary" id="googleOpenBtn">🔎 開啟 Google 圖片搜尋</button><button id="googleOneClickBtn">⚡ 一鍵選圖模式</button></div><div style="margin-top:14px"><input id="googleImageUrl" placeholder="貼上 Google 圖片中的圖片網址" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="googleAnalyzeUrlBtn">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="googleImageFile" type="file" accept="image/*" style="display:none"></label></div></div>';
   $('googleOpenBtn').onclick=function(){window.open(url,'_blank','noopener')};
+  $('googleOneClickBtn').onclick=function(){
+    const launch='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ)+'&udm=2';
+    try{
+      const w=window.open(launch,'_blank','noopener');
+      status('⚡ 已開啟 Google 圖片。點選圖片後，若瀏覽器提供「複製圖片網址」，貼回下方即可；也可直接使用手機選圖。','ok');
+    }catch(e){window.location.href=launch}
+  };
   $('googleAnalyzeUrlBtn').onclick=function(){
     const v=($('googleImageUrl').value||'').trim();
     if(!v){status('請先貼上 Google 圖片的圖片網址。','bad');return}
