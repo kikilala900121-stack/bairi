@@ -621,11 +621,12 @@ async function fetchImageData(src){
   throw lastError||new Error('圖片下載失敗');
 }
 
-async function analyzeExternalImage(src,title,isLocal,sourceUrl){
+async function analyzeExternalImage(src,title,isLocal,sourceUrl,sourceType){
   $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=sourceUrl||(!isLocal?src:'');
   $('title').textContent=title;$('meta').textContent='正在把圖片下載到瀏覽器內……';$('time').textContent='圖片';
-  $('imageResult').innerHTML='<div class="tip" id="pinLoadTip">正在從 Pinterest 取得圖片資料……</div>';
+  $('imageResult').innerHTML='<div class="tip" id="pinLoadTip">正在取得圖片資料……</div>';
   const tip=$('pinLoadTip');
+  const label=sourceType==='google'?'Google 圖片':sourceType==='openverse'?'網路圖片':'Pinterest';
   try{
     let dataUrl;
     if(isLocal && /^data:image\//i.test(src))dataUrl=src;
@@ -638,20 +639,18 @@ async function analyzeExternalImage(src,title,isLocal,sourceUrl){
     im.src=dataUrl;
 
     saveToday({
-      title:title,time:0,duration:0,id:'',source:'pinterest-image',
+      title:title,time:0,duration:0,id:'',source:sourceType==='google'?'google-image':sourceType==='openverse'?'openverse-image':'pinterest-image',
       query:$('query').value.trim(),scene:$('sceneType').value,
       image:'',original:sourceUrl||src
     });
-    status('✅ Pinterest 圖片已下載到瀏覽器內，正在分析構圖……','ok');
+    status('✅ '+label+'圖片已下載到瀏覽器內，正在分析構圖……','ok');
   }catch(e){
     console.error(e);
     if(tip)tip.textContent='圖片下載失敗。';
     $('meta').textContent='無法取得圖片資料';
-    status('Pinterest 圖片下載失敗。百日繪已嘗試直接下載與圖片轉送服務；請重新貼一次 Pin 網址。','bad');
+    status(label+'圖片下載失敗；請重新嘗試或改用其他圖片來源。','bad');
   }
 }
-
-
 function showGoogleImagePicker(searchQ,url){
   $('playerBox').style.display='none';
   $('imageStage').style.display='block';
@@ -679,75 +678,82 @@ function showGoogleImagePicker(searchQ,url){
 window.randomGoogleImage=async function(q){
   const type=$('sceneType').value;
   const extra={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
-  const searchQ=(q||'').trim()+extra;
+  const searchQ=((q||'').trim()+extra).trim();
   if(!searchQ){status('請先輸入主題，例如「哈利波特」。','bad');return}
 
   $('playerBox').style.display='none';
   $('imageStage').style.display='block';
-  $('title').textContent='🔎 Google 圖片｜'+searchQ;
+  $('title').textContent='🔎 網路圖片｜'+searchQ;
   $('meta').textContent='正在隨機選圖……';
-  $('time').textContent='Google';
+  $('time').textContent='圖片';
   $('imageResult').innerHTML='<div class="tip">🎲 正在搜尋「'+esc(searchQ)+'」並隨機選圖……</div>';
-  status('🎲 正在從 Google 圖片隨機選圖……','ok');
+  status('🎲 正在取得「'+searchQ+'」圖片……','ok');
 
-  try{
+  async function tryGoogle(){
     const reader='https://r.jina.ai/http://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
     const rr=await fetch(reader,{mode:'cors',cache:'no-store'});
-    if(!rr.ok)throw new Error('Google 搜尋讀取失敗');
+    if(!rr.ok)throw new Error('Google reader HTTP '+rr.status);
     const body=await rr.text();
-
-    const urls=[];
-    const seen={};
-    const tokens=body.split(/[\s"'<>]+/);
-
-    tokens.forEach(function(v){
+    const urls=[],seen={};
+    body.split(/[\\s"'<>]+/).forEach(function(v){
       let u=v.replace(/\\u002F/g,'/').replace(/\\\//g,'/').replace(/&amp;/g,'&');
-      if(u.indexOf('https://')!==0 && u.indexOf('http://')!==0)return;
+      if(u.indexOf('https://')!==0&&u.indexOf('http://')!==0)return;
       const low=u.toLowerCase();
-
-      // Google 圖片縮圖通常沒有 .jpg/.png 副檔名，因此不能只靠副檔名判斷。
-      const isThumb=
-        low.indexOf('encrypted-tbn0.gstatic.com')>=0 ||
-        low.indexOf('encrypted-tbn1.gstatic.com')>=0 ||
-        low.indexOf('encrypted-tbn2.gstatic.com')>=0 ||
-        low.indexOf('encrypted-tbn3.gstatic.com')>=0 ||
+      const isThumb=low.indexOf('encrypted-tbn0.gstatic.com')>=0||
+        low.indexOf('encrypted-tbn1.gstatic.com')>=0||
+        low.indexOf('encrypted-tbn2.gstatic.com')>=0||
+        low.indexOf('encrypted-tbn3.gstatic.com')>=0||
         low.indexOf('gstatic.com/images')>=0;
-
-      const isImageFile=
-        /\.(jpg|jpeg|png|webp)([?#]|$)/i.test(u);
-
-      const blocked=
-        low.indexOf('google.com/search')>=0 ||
-        low.indexOf('google.com/imgres')>=0 ||
+      const isImageFile=/\\.(jpg|jpeg|png|webp)([?#]|$)/i.test(u);
+      const blocked=low.indexOf('google.com/search')>=0||
+        low.indexOf('google.com/imgres')>=0||
         low.indexOf('googleusercontent.com')>=0;
-
-      if(!blocked && (isThumb||isImageFile) && !seen[u]){
-        seen[u]=1;
-        urls.push(u);
+      if(!blocked&&(isThumb||isImageFile)&&!seen[u]){
+        seen[u]=1;urls.push(u);
       }
     });
-
     if(!urls.length)throw new Error('Google 沒有回傳可用圖片');
+    const chosen=urls[Math.floor(Math.random()*urls.length)];
+    await analyzeExternalImage(chosen,'🔎 Google 圖片｜'+searchQ,false,chosen,'google');
+    return true;
+  }
 
-    // 排除太短或明顯不是圖片的結果，並隨機抽一張。
-    const candidates=urls.filter(function(u){
-      return u.length>40;
+  async function tryOpenverse(){
+    const api='https://api.openverse.org/v1/images/?q='+encodeURIComponent(searchQ)+'&page_size=30';
+    const rr=await fetch(api,{mode:'cors',cache:'no-store'});
+    if(!rr.ok)throw new Error('Openverse HTTP '+rr.status);
+    const data=await rr.json();
+    const items=(data.results||[]).filter(function(x){
+      return x&&(x.url||x.thumbnail);
     });
-    const chosen=(candidates.length?candidates:urls)[Math.floor(Math.random()*(candidates.length?candidates:urls).length)];
+    if(!items.length)throw new Error('沒有可用網路圖片');
+    const item=items[Math.floor(Math.random()*items.length)];
+    const chosen=item.url||item.thumbnail;
+    await analyzeExternalImage(chosen,'🌐 網路圖片｜'+searchQ,false,chosen,'openverse');
+    return true;
+  }
 
-    $('imageResult').innerHTML='<div class="tip">🖼️ 已隨機選到圖片，正在顯示……</div>';
-    await analyzeExternalImage(chosen,'Google 圖片｜'+searchQ,false,chosen);
+  try{
+    try{
+      await tryGoogle();
+      $('meta').textContent='Google 圖片｜隨機選圖';
+      status('🎯 已從 Google 圖片隨機選出圖片。','ok');
+      return;
+    }catch(googleErr){
+      console.warn('Google image search failed; using Openverse fallback:',googleErr);
+      $('meta').textContent='Google 圖片目前無法直接取得，改用網路圖片備援……';
+    }
 
-    $('meta').textContent='Google 圖片｜隨機選圖';
-    status('🎯 已從「'+searchQ+'」隨機選出圖片，可以開始畫了。','ok');
+    await tryOpenverse();
+    $('meta').textContent='網路圖片｜隨機選圖（Google 備援）';
+    status('🎯 Google 圖片目前受限制，已自動改用網路圖片並隨機選圖。','ok');
   }catch(e){
-    console.error('Google random image error:',e);
-    $('meta').textContent='Google 圖片暫時無法自動取得';
-    $('imageResult').innerHTML='<div class="tip">⚠️ Google 圖片目前無法自動取得，請稍後再試。</div>';
-    status('⚠️ Google 圖片自動選圖失敗，沒有開啟新的百日繪視窗。','bad');
+    console.error('Image picker error:',e);
+    $('meta').textContent='圖片搜尋暫時無法取得';
+    $('imageResult').innerHTML='<div class="tip">⚠️ 圖片服務目前無法取得結果。可以稍後再試，或改用「影視劇照／Pinterest」。</div>';
+    status('⚠️ 圖片自動選取失敗，請稍後再試。','bad');
   }
 }
-
 function showGoogleFallback(searchQ){
   const url='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
   $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🔎 Google 圖片</b><p class="tip">目前無法直接讀取搜尋結果，仍可開啟同一個主題的 Google 圖片搜尋。</p><button class="primary" id="googleFallbackBtn">開啟 Google 圖片</button><div style="margin-top:12px"><input id="googleFallbackUrl" placeholder="貼上圖片網址後分析" style="width:100%;min-width:0"></div><button id="googleFallbackAnalyze" style="margin-top:8px">🔍 分析圖片</button></div>';
