@@ -46,7 +46,7 @@ body.locked .wrap{user-select:none}
 <select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="tvmaze">🎞️ 影視劇照</option><option value="pinterest">📌 Pinterest</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
 <button id="install" class="install">＋ 加到主畫面</button>
 </div>
-<div style="margin-top:9px"><input id="apiKey" type="password" placeholder="YouTube Data API v3 Key（YouTube 才需要）"></div><div style="margin-top:8px;padding:10px 12px;background:#151515;border:1px solid #333;border-radius:12px;color:#bbb">🖼️ <b>網路圖片</b>：改用 Wikimedia Commons 公開圖片搜尋，不需要 Google API Key 或 CX；搜尋結果會直接顯示可用圖片。</div>
+<div style="margin-top:9px"><input id="apiKey" type="password" placeholder="YouTube Data API v3 Key（YouTube 才需要）"></div><div style="margin-top:8px;padding:10px 12px;background:#151515;border:1px solid #333;border-radius:12px;color:#bbb">🖼️ <b>網路圖片</b>：影視劇照使用 TVmaze；Pinterest 可先選圖，再把圖片網址貼回來或從手機選取圖片，回到百日繪自動分析構圖。</div>
 </div>
 <div class="card">
 <div id="playerBox"><div id="player"></div><div id="grid9" class="grid9" aria-hidden="true"></div><div id="compOverlay" class="compOverlay" aria-hidden="true"></div></div>
@@ -68,8 +68,8 @@ function status(s,c){$('status').textContent=s;$('status').className=c||''}
 function history(){
 let h=getHistory(),today=new Date().toLocaleDateString('zh-TW');
 $('history').innerHTML=h.length?h.slice().reverse().map(function(x,i){
-let dayNo=h.length-i,can=!!x.id;
-return '<button class="'+(x.d===today?'currentDay':'')+'" '+(can?'onclick="loadDay('+dayNo+')"':'')+'>'+dayNo+'. '+esc(x.d)+'｜'+esc(x.source||'youtube')+'｜'+esc(x.t)+'｜'+((x.source==='google'||x.source==='commons')?'圖片':x.source==='pinterest'?'Pinterest':fmt(x.s))+(can?'':'｜舊紀錄需重新抽取')+'</button>';
+let dayNo=h.length-i,can=!!x.id||!!x.image||x.source==='pinterest';
+return '<button class="'+(x.d===today?'currentDay':'')+'" '+(can?'onclick="loadDay('+dayNo+')"':'')+'>'+dayNo+'. '+esc(x.d)+'｜'+esc(x.source||'youtube')+'｜'+esc(x.t)+'｜'+((x.source==='google'||x.source==='commons'||x.source==='tvmaze'||x.source==='pinterest-image')?'圖片':x.source==='pinterest'?'Pinterest':fmt(x.s))+(can?'':'｜舊紀錄需重新抽取')+'</button>';
 }).join(''):'尚無紀錄';
 $('day').textContent='第 '+Math.min(h.length+1,100)+' / 100 天';
 }
@@ -79,7 +79,8 @@ if(idx<0)return;
 let x=h[idx];
 if(!x){return}
 if((x.source==='tvmaze'||x.source==='commons'||x.source==='google')&&x.image){current=null;$('playerBox').style.display='none';$('imageStage').style.display='block';$('title').textContent=x.t||'網路圖片';$('meta').textContent=(x.source==='google'?'舊版 Google 圖片':(x.source==='tvmaze'?'TVmaze 影視劇照':'Wikimedia Commons 圖片'))+'｜'+(x.query||'');$('time').textContent='圖片';$('imageResult').innerHTML='<a href="'+escAttr(x.original||x.image)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.image)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a>';const im=$('imageResult').querySelector('img');if(im)im.onload=drawGuides;drawGuides();status('已回到第 '+dayNo+' 天的圖片。','ok');return}
-if(x.source==='pinterest'){current=null;$('playerBox').style.display='none';$('imageStage').style.display='block';$('title').textContent=x.t||'Pinterest';$('meta').textContent='Pinterest｜'+(x.query||'');$('time').textContent='Pinterest';$('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest 靈感搜尋</b><p class="tip">點擊下方按鈕回到當天的 Pinterest 搜尋。</p><button class="primary" onclick="window.open(\''+escAttr(x.original||'https://www.pinterest.com/search/pins/?q='+encodeURIComponent(x.query||''))+'\',\'_blank\',\'noopener\')">開啟 Pinterest</button></div>';status('已回到第 '+dayNo+' 天的 Pinterest 靈感。','ok');return}
+if(x.source==='pinterest-image'&&x.image){analyzeExternalImage(x.image,x.t||'Pinterest 圖片',x.image.startsWith('data:image/'));return}
+if(x.source==='pinterest'){current=null;$('playerBox').style.display='none';$('imageStage').style.display='block';$('title').textContent=x.t||'Pinterest';$('meta').textContent='Pinterest｜'+(x.query||'');$('time').textContent='Pinterest';$('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest 靈感搜尋</b><p class="tip">點擊下方按鈕回到當天的 Pinterest 搜尋。</p><button class="primary" onclick="showPinterestPicker(\''+escAttr((x.t||'Pinterest').replace(/^Pinterest｜/,''))+'\',\''+escAttr(x.original||'https://www.pinterest.com/search/pins/?q='+encodeURIComponent(x.query||''))+'\')">開啟 Pinterest 選圖</button></div>';status('已回到第 '+dayNo+' 天的 Pinterest 靈感。','ok');return}
 if(!x.id){status('這筆是舊版紀錄，沒有保存影片 ID；請重新抽取後才可回到該圖。','bad');return}
 current={id:x.id,title:x.t||'',time:x.s||0,duration:x.duration||0};
 lastUrl='https://www.youtube.com/watch?v='+x.id+'&t='+x.s+'s';
@@ -451,20 +452,42 @@ async function pickTVMazeImage(q){
   }
 }
 
+function showPinterestPicker(searchQ,url){
+  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;
+  $('title').textContent='Pinterest｜'+searchQ;$('meta').textContent='先在 Pinterest 選圖，再回百日繪分析';$('time').textContent='Pinterest';
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest → 百日繪</b><p class="tip">先開啟 Pinterest 選一張想畫的圖。回到百日繪後，可以貼上圖片網址；如果 Pinterest 不方便取得圖片網址，也可以先把圖片存到手機，再用「選取手機圖片」。</p><div class="row" style="margin-top:10px"><button class="primary" onclick="window.open(\\''+escAttr(url)+'\\',\\'_blank\\',\\'noopener\\')">📌 開啟 Pinterest 選圖</button></div><div style="margin-top:14px"><input id="pinImageUrl" placeholder="貼上 Pinterest 圖片網址（https://...）" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" onclick="analyzePinterestUrl()">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="pinImageFile" type="file" accept="image/*" style="display:none" onchange="analyzePinterestFile(this.files[0])"></label></div><div class="tip" style="margin-top:9px">提示：Pinterest 的 Pin 頁面網址不一定就是圖片檔網址；若貼 Pin 網址無法顯示，請下載圖片後用「選取手機圖片」。</div></div>';
+  saveToday({title:'Pinterest｜'+searchQ,time:0,duration:0,id:'',source:'pinterest',query:$('query').value.trim(),scene:$('sceneType').value,original:url});
+  status('已開啟 Pinterest 選圖流程。選好圖後回來即可貼網址或選手機圖片。','ok');
+}
+function analyzePinterestUrl(){
+  const url=($('pinImageUrl')?.value||'').trim();
+  if(!url){status('請先貼上 Pinterest 圖片網址。','bad');return}
+  if(!/^https?:\\/\\//i.test(url)){status('圖片網址格式不正確，請貼上以 http:// 或 https:// 開頭的網址。','bad');return}
+  analyzeExternalImage(url,'Pinterest 圖片',false);
+}
+function analyzePinterestFile(file){
+  if(!file)return;
+  if(!file.type||!file.type.startsWith('image/')){status('請選擇 JPG、PNG、WEBP 等圖片檔。','bad');return}
+  const reader=new FileReader();
+  reader.onload=function(){analyzeExternalImage(reader.result,'Pinterest 選取圖片',true)};
+  reader.onerror=function(){status('圖片讀取失敗，請重新選取。','bad')};
+  reader.readAsDataURL(file);
+}
+function analyzeExternalImage(src,title,isLocal){
+  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=isLocal?'':src;
+  $('title').textContent=title;$('meta').textContent='已回到百日繪｜可自動分析構圖';$('time').textContent='圖片';
+  $('imageResult').innerHTML='<img src="'+escAttr(src)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div class="tip" style="margin-top:8px">圖片已載入。按下「🔍 自動判斷構圖」即可分析；也可以用「構圖模式」手動切換。</div>';
+  const im=$('imageResult').querySelector('img');
+  if(im){im.onload=function(){drawGuides();autoDetectComposition()};im.onerror=function(){status('圖片網址無法直接顯示。請把 Pinterest 圖片存到手機後，再使用「選取手機圖片」。','bad')}}
+  saveToday({title:title,time:0,duration:0,id:'',source:'pinterest-image',query:$('query').value.trim(),scene:$('sceneType').value,image:src,original:isLocal?'':src});
+  status('已回到百日繪，正在自動分析構圖……','ok');
+}
 function pickPinterest(q){
   $('playerBox').style.display='none';$('imageResult').style.display='block';
   let variants=['character','scene','portrait','full body','action'];
-  let extra=variants[Math.floor(Math.random()*variants.length)];
-  let searchQ=q+' '+extra;
+  let extra=variants[Math.floor(Math.random()*variants.length)],searchQ=q+' '+extra;
   let url='https://www.pinterest.com/search/pins/?q='+encodeURIComponent(searchQ);
-  lastUrl=url;
-  current=null;
-  $('title').textContent='Pinterest｜'+searchQ;
-  $('meta').textContent='隨機搜尋靈感';
-  $('time').textContent='Pinterest';
-  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest 靈感搜尋</b><p class="tip">Pinterest 不提供適合直接放在 GitHub Pages 前端隨機抓圖的公開搜尋介面，因此這裡會隨機組合搜尋詞並開啟 Pinterest 搜尋結果。</p><button class="primary" onclick="window.open(\''+escAttr(url)+'\',\'_blank\',\'noopener\')">開啟 Pinterest 搜尋</button></div>';
-  saveToday({title:'Pinterest｜'+searchQ,time:0,duration:0,id:'',source:'pinterest',query:q,scene:$('sceneType').value,original:url});
-  status('已產生 Pinterest 隨機靈感搜尋。','ok');
+  lastUrl=url;showPinterestPicker(searchQ,url);
 }
 
 function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
