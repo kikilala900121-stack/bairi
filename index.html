@@ -43,7 +43,7 @@ body.locked .wrap{user-select:none}
 <option value="scene">一般場景</option><option value="drama">劇情片段</option><option value="action">動作場景</option>
 <option value="portrait">人物特寫</option><option value="fullbody">全身人物</option><option value="anime">動畫角色</option>
 </select>
-<select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="tvmaze">🎞️ 影視劇照</option><option value="pinterest">📌 Pinterest</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
+<select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="tvmaze">🎞️ 影視劇照</option><option value="pinterest">📌 Pinterest</option><option value="google">🔎 Google 圖片</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
 <button id="install" class="install">＋ 加到主畫面</button>
 </div>
 <div style="margin-top:9px"><input id="apiKey" type="password" placeholder="YouTube Data API v3 Key（YouTube 才需要）"></div><div style="margin-top:8px;padding:10px 12px;background:#151515;border:1px solid #333;border-radius:12px;color:#bbb">🖼️ <b>網路圖片</b>：影視劇照使用 TVmaze；Pinterest 可先選圖，再把圖片網址貼回來或從手機選取圖片，回到百日繪自動分析構圖。</div>
@@ -342,7 +342,7 @@ async function pick(){
 
   let source=$('sourceType').value;
   if(source==='all'){
-    let choices=['youtube','tvmaze','pinterest'];
+    let choices=['youtube','tvmaze','pinterest','google'];
     source=choices[Math.floor(Math.random()*choices.length)];
   }
 
@@ -354,6 +354,9 @@ async function pick(){
   }
   if(source==='pinterest'){
     return pickPinterest(q);
+  }
+  if(source==='google'){
+    return pickGoogleImages(q);
   }
 }
 
@@ -632,6 +635,43 @@ async function analyzeExternalImage(src,title,isLocal,sourceUrl){
     $('meta').textContent='無法取得圖片資料';
     status('Pinterest 圖片下載失敗。百日繪已嘗試直接下載與圖片轉送服務；請重新貼一次 Pin 網址。','bad');
   }
+}
+
+
+function showGoogleImagePicker(searchQ,url){
+  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;
+  $('title').textContent='Google 圖片｜'+searchQ;
+  $('meta').textContent='先在 Google 圖片選圖，再回百日繪分析';
+  $('time').textContent='Google';
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🔎 Google 圖片 → 百日繪</b><p class="tip">先開啟 Google 圖片搜尋，選一張想畫的圖。回來後可貼「圖片網址」；如果不方便取得網址，也可以直接從手機選取圖片。</p><div class="row" style="margin-top:10px"><button class="primary" id="googleOpenBtn">🔎 開啟 Google 圖片搜尋</button></div><div style="margin-top:14px"><input id="googleImageUrl" placeholder="貼上 Google 圖片中的圖片網址" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="googleAnalyzeUrlBtn">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="googleImageFile" type="file" accept="image/*" style="display:none"></label></div></div>';
+  $('googleOpenBtn').onclick=function(){window.open(url,'_blank','noopener')};
+  $('googleAnalyzeUrlBtn').onclick=function(){
+    const v=($('googleImageUrl').value||'').trim();
+    if(!v){status('請先貼上 Google 圖片的圖片網址。','bad');return}
+    if(!/^https?:\/\//i.test(v)){status('網址格式不正確，請貼完整圖片網址。','bad');return}
+    analyzeExternalImage(v,'Google 圖片',false,v);
+  };
+  $('googleImageFile').onchange=function(){
+    const file=this.files&&this.files[0];
+    if(!file)return;
+    if(!file.type||!file.type.startsWith('image/')){status('請選擇 JPG、PNG、WEBP 等圖片檔。','bad');return}
+    const reader=new FileReader();
+    reader.onload=function(){analyzeExternalImage(reader.result,'Google 圖片｜手機選取',true)};
+    reader.onerror=function(){status('圖片讀取失敗，請重新選取。','bad')};
+    reader.readAsDataURL(file);
+  };
+  saveToday({title:'Google 圖片｜'+searchQ,time:0,duration:0,id:'',source:'google',query:$('query').value.trim(),scene:$('sceneType').value,original:url});
+  status('已開啟 Google 圖片搜尋。選好圖片後回來貼網址或選手機圖片。','ok');
+}
+
+function pickGoogleImages(q){
+  $('playerBox').style.display='none';
+  $('imageStage').style.display='block';
+  const type=$('sceneType').value;
+  const extra={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
+  const searchQ=q+extra;
+  const url='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
+  showGoogleImagePicker(searchQ,url);
 }
 
 function pickPinterest(q){
