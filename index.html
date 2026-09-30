@@ -524,24 +524,19 @@ function analyzePinterestFile(file){
 
 async function fetchImageData(src){
   const attempts=[
-    {url:src,mode:'blob'},
-    {url:'https://wsrv.nl/?url='+encodeURIComponent(src)+'&output=jpg&encoding=base64',mode:'text'},
-    {url:'https://images.weserv.nl/?url='+encodeURIComponent(src)+'&output=jpg&encoding=base64',mode:'text'}
+    src,
+    'https://wsrv.nl/?url='+encodeURIComponent(src)+'&output=jpg',
+    'https://images.weserv.nl/?url='+encodeURIComponent(src)+'&output=jpg'
   ];
   let lastError=null;
-  for(const a of attempts){
+  for(const url of attempts){
     try{
-      const r=await fetch(a.url,{mode:'cors',cache:'no-store'});
+      const r=await fetch(url,{mode:'cors',cache:'no-store',redirect:'follow'});
       if(!r.ok)throw new Error('HTTP '+r.status);
-      if(a.mode==='text'){
-        const data=(await r.text()).trim();
-        if(/^data:image\//i.test(data))return data;
-        const m=data.match(/data:image\/[^"']+/i);
-        if(m)return m[0];
-        throw new Error('沒有收到圖片資料');
-      }
       const blob=await r.blob();
-      if(!blob.type||!blob.type.startsWith('image/'))throw new Error('回傳內容不是圖片');
+      if(!blob.size)throw new Error('空白圖片');
+      const type=(r.headers.get('content-type')||blob.type||'').toLowerCase();
+      if(!type.startsWith('image/'))throw new Error('回傳內容不是圖片');
       return await new Promise((resolve,reject)=>{
         const reader=new FileReader();
         reader.onload=()=>resolve(reader.result);
