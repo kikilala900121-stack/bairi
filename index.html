@@ -480,11 +480,23 @@ function analyzePinterestFile(file){
 function analyzeExternalImage(src,title,isLocal){
   $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=isLocal?'':src;
   $('title').textContent=title;$('meta').textContent='已回到百日繪｜可自動分析構圖';$('time').textContent='圖片';
-  $('imageResult').innerHTML='<img src="'+escAttr(src)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div class="tip" style="margin-top:8px">圖片已載入。按下「🔍 自動判斷構圖」即可分析；也可以用「構圖模式」手動切換。</div>';
+  const safeSrc=escAttr(src);
+  const proxySrc=!isLocal&&/^https?:\\/\\//i.test(src)?'https://images.weserv.nl/?url='+encodeURIComponent(src):src;
+  $('imageResult').innerHTML='<img id="externalPinImage" src="'+escAttr(proxySrc)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div class="tip" style="margin-top:8px">圖片載入後會自動分析構圖。若 Pinterest 網址是 Pin 頁面而不是圖片檔，請改用「選取手機圖片」。</div>';
   const im=$('imageResult').querySelector('img');
-  if(im){im.onload=function(){drawGuides();autoDetectComposition()};im.onerror=function(){status('圖片網址無法直接顯示。請把 Pinterest 圖片存到手機後，再使用「選取手機圖片」。','bad')}}
+  if(im){
+    im.onload=function(){drawGuides();autoDetectComposition()};
+    im.onerror=function(){
+      if(!isLocal && im.src!==src){
+        im.onerror=function(){status('這個網址不是可直接讀取的圖片，或 Pinterest 阻擋外部載入。請在 Pinterest 把圖片存到手機，再用「📱 選取手機圖片」。','bad')};
+        im.src=src;
+      }else{
+        status('圖片網址無法直接顯示。請把圖片存到手機後，再用「📱 選取手機圖片」。','bad');
+      }
+    };
+  }
   saveToday({title:title,time:0,duration:0,id:'',source:'pinterest-image',query:$('query').value.trim(),scene:$('sceneType').value,image:src,original:isLocal?'':src});
-  status('已回到百日繪，正在自動分析構圖……','ok');
+  status('正在載入圖片並分析構圖……','ok');
 }
 function pickPinterest(q){
   $('playerBox').style.display='none';
