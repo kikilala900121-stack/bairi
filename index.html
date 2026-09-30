@@ -356,7 +356,7 @@ async function pick(){
     return pickPinterest(q);
   }
   if(source==='google'){
-    return pickGoogleImages(q);
+    return randomGoogleImage(q);
   }
 }
 
@@ -639,47 +639,65 @@ async function analyzeExternalImage(src,title,isLocal,sourceUrl){
 
 
 function showGoogleImagePicker(searchQ,url){
-  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;
-  $('title').textContent='Google 圖片｜'+searchQ;
-  $('meta').textContent='先在 Google 圖片選圖，再回百日繪分析';
+  $('playerBox').style.display='none';
+  $('imageStage').style.display='block';
+  $('title').textContent='🔎 Google 圖片｜'+searchQ;
+  $('meta').textContent='隨機抽取主題圖片';
   $('time').textContent='Google';
-  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🔎 Google 圖片 → 百日繪</b><p class="tip">先開啟 Google 圖片搜尋，選一張想畫的圖。回來後可貼「圖片網址」；如果不方便取得網址，也可以直接從手機選取圖片。</p><div class="row" style="margin-top:10px"><button class="primary" id="googleOpenBtn">🔎 開啟 Google 圖片搜尋</button><button id="googleOneClickBtn">⚡ 一鍵選圖模式</button></div><div style="margin-top:14px"><input id="googleImageUrl" placeholder="貼上 Google 圖片中的圖片網址" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="googleAnalyzeUrlBtn">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="googleImageFile" type="file" accept="image/*" style="display:none"></label></div></div>';
-  $('googleOpenBtn').onclick=function(){window.open(url,'_blank','noopener')};
-  $('googleOneClickBtn').onclick=function(){
-    const launch='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ)+'&udm=2';
-    try{
-      const w=window.open(launch,'_blank','noopener');
-      status('⚡ 已開啟 Google 圖片。點選圖片後，若瀏覽器提供「複製圖片網址」，貼回下方即可；也可直接使用手機選圖。','ok');
-    }catch(e){window.location.href=launch}
-  };
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🎲 Google 圖片隨機取景</b><p class="tip">按下「🎲 隨機取景」後，會依照你輸入的主題隨機挑選一張圖片並自動分析構圖。</p><div class="row" style="margin-top:10px"><button class="primary" id="googleSearchBtn">🔎 開啟 Google 圖片搜尋</button></div><div style="margin-top:14px"><input id="googleImageUrl" placeholder="也可貼上圖片網址（備用）" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="googleAnalyzeUrlBtn">🔍 分析這張圖片</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="googleImageFile" type="file" accept="image/*" style="display:none"></label></div></div>';
+  $('googleSearchBtn').onclick=function(){window.open(url,'_blank','noopener')};
   $('googleAnalyzeUrlBtn').onclick=function(){
     const v=($('googleImageUrl').value||'').trim();
-    if(!v){status('請先貼上 Google 圖片的圖片網址。','bad');return}
-    if(!/^https?:\/\//i.test(v)){status('網址格式不正確，請貼完整圖片網址。','bad');return}
+    if(!v){status('請先貼上圖片網址。','bad');return}
+    if(!/^https?:\/\//i.test(v)){status('網址格式不正確。','bad');return}
     analyzeExternalImage(v,'Google 圖片',false,v);
   };
   $('googleImageFile').onchange=function(){
-    const file=this.files&&this.files[0];
-    if(!file)return;
-    if(!file.type||!file.type.startsWith('image/')){status('請選擇 JPG、PNG、WEBP 等圖片檔。','bad');return}
+    const file=this.files&&this.files[0]; if(!file)return;
+    if(!file.type||!file.type.startsWith('image/')){status('請選擇圖片檔。','bad');return}
     const reader=new FileReader();
     reader.onload=function(){analyzeExternalImage(reader.result,'Google 圖片｜手機選取',true)};
-    reader.onerror=function(){status('圖片讀取失敗，請重新選取。','bad')};
     reader.readAsDataURL(file);
   };
-  saveToday({title:'Google 圖片｜'+searchQ,time:0,duration:0,id:'',source:'google',query:$('query').value.trim(),scene:$('sceneType').value,original:url});
-  status('已開啟 Google 圖片搜尋。選好圖片後回來貼網址或選手機圖片。','ok');
+  status('已準備好「'+searchQ+'」主題，按上方「🎲 隨機取景」即可抽圖。','ok');
 }
 
-function pickGoogleImages(q){
-  $('playerBox').style.display='none';
-  $('imageStage').style.display='block';
+async function randomGoogleImage(q){
   const type=$('sceneType').value;
   const extra={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
-  const searchQ=q+extra;
-  const url='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
-  showGoogleImagePicker(searchQ,url);
+  const searchQ=(q||'').trim()+extra;
+  if(!searchQ){status('請先輸入主題，例如「哈利波特」。','bad');return}
+  $('playerBox').style.display='none'; $('imageStage').style.display='block';
+  status('🎲 正在從「'+searchQ+'」隨機取得圖片……','ok');
+  // Google image result thumbnails are intentionally not scraped directly by the page.
+  // Use a public image-search proxy endpoint, then select a random image URL.
+  const endpoints=[
+    'https://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ),
+    'https://www.google.com/search?udm=2&q='+encodeURIComponent(searchQ)
+  ];
+  try{
+    const reader='https://r.jina.ai/http://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
+    const rr=await fetch(reader,{mode:'cors',cache:'no-store'});
+    if(!rr.ok)throw new Error('Google image search unavailable');
+    const text=await rr.text();
+    const urls=[];
+    const re=/https?:\\?\/\\?\/[^\s"'<>\\]+/g;
+    let m;
+    while((m=re.exec(text))&&urls.length<100){
+      let u=m[0].replace(/\\\//g,'/').replace(/\\u0026/g,'&').replace(/&amp;/g,'&');
+      if(/^https?:\/\//i.test(u) && /\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(u) && !/google\./i.test(u) && !urls.includes(u))urls.push(u);
+    }
+    if(!urls.length)throw new Error('找不到可用圖片');
+    const chosen=urls[Math.floor(Math.random()*urls.length)];
+    analyzeExternalImage(chosen,'Google 圖片｜'+searchQ,false,chosen);
+  }catch(e){
+    console.error(e);
+    // Keep a reliable fallback: open the exact Google Images search rather than pretending a random image was found.
+    window.open(endpoints[0],'_blank','noopener');
+    status('Google 暫時限制自動讀取圖片；已開啟「'+searchQ+'」圖片搜尋。你可以貼圖片網址或選手機圖片。','bad');
+  }
 }
+
 
 function pickPinterest(q){
   $('playerBox').style.display='none';
