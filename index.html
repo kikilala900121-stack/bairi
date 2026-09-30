@@ -681,43 +681,70 @@ async function randomGoogleImage(q){
   const extra={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
   const searchQ=(q||'').trim()+extra;
   if(!searchQ){status('請先輸入主題，例如「哈利波特」。','bad');return}
+
   $('playerBox').style.display='none';
   $('imageStage').style.display='block';
   $('title').textContent='🔎 Google 圖片｜'+searchQ;
-  $('meta').textContent='正在隨機搜尋圖片……';
+  $('meta').textContent='正在隨機選圖……';
   $('time').textContent='Google';
-  status('🎲 正在從「'+searchQ+'」隨機取得圖片……','ok');
+  $('imageResult').innerHTML='<div class="tip">🎲 正在搜尋「'+esc(searchQ)+'」並隨機選圖……</div>';
+  status('🎲 正在從 Google 圖片隨機選圖……','ok');
 
   try{
     const reader='https://r.jina.ai/http://www.google.com/search?tbm=isch&q='+encodeURIComponent(searchQ);
     const rr=await fetch(reader,{mode:'cors',cache:'no-store'});
-    if(!rr.ok)throw new Error('搜尋服務 HTTP '+rr.status);
+    if(!rr.ok)throw new Error('Google 搜尋讀取失敗');
     const body=await rr.text();
 
     const urls=[];
     const seen={};
     const tokens=body.split(/[\s"'<>]+/);
+
     tokens.forEach(function(v){
-      let u=v;
+      let u=v.replace(/\\u002F/g,'/').replace(/\\\//g,'/').replace(/&amp;/g,'&');
       if(u.indexOf('https://')!==0 && u.indexOf('http://')!==0)return;
-      u=u.replace(/\\u002F/g,'/').replace(/\\\//g,'/').replace(/&amp;/g,'&');
-      const lower=u.toLowerCase();
-      const imageExt=lower.indexOf('.jpg')>=0||lower.indexOf('.jpeg')>=0||lower.indexOf('.png')>=0||lower.indexOf('.webp')>=0;
-      if(!imageExt)return;
-      if(lower.indexOf('google.')>=0||lower.indexOf('gstatic.')>=0)return;
-      if(!seen[u]){seen[u]=1;urls.push(u)}
+      const low=u.toLowerCase();
+
+      // Google 圖片縮圖通常沒有 .jpg/.png 副檔名，因此不能只靠副檔名判斷。
+      const isThumb=
+        low.indexOf('encrypted-tbn0.gstatic.com')>=0 ||
+        low.indexOf('encrypted-tbn1.gstatic.com')>=0 ||
+        low.indexOf('encrypted-tbn2.gstatic.com')>=0 ||
+        low.indexOf('encrypted-tbn3.gstatic.com')>=0 ||
+        low.indexOf('gstatic.com/images')>=0;
+
+      const isImageFile=
+        /\.(jpg|jpeg|png|webp)([?#]|$)/i.test(u);
+
+      const blocked=
+        low.indexOf('google.com/search')>=0 ||
+        low.indexOf('google.com/imgres')>=0 ||
+        low.indexOf('googleusercontent.com')>=0;
+
+      if(!blocked && (isThumb||isImageFile) && !seen[u]){
+        seen[u]=1;
+        urls.push(u);
+      }
     });
 
-    if(!urls.length)throw new Error('搜尋結果沒有可用圖片網址');
+    if(!urls.length)throw new Error('Google 沒有回傳可用圖片');
 
-    const chosen=urls[Math.floor(Math.random()*urls.length)];
-    $('imageResult').innerHTML='<div class="tip">已抽到圖片，正在下載……</div>';
+    // 排除太短或明顯不是圖片的結果，並隨機抽一張。
+    const candidates=urls.filter(function(u){
+      return u.length>40;
+    });
+    const chosen=(candidates.length?candidates:urls)[Math.floor(Math.random()*(candidates.length?candidates:urls).length)];
+
+    $('imageResult').innerHTML='<div class="tip">🖼️ 已隨機選到圖片，正在顯示……</div>';
     await analyzeExternalImage(chosen,'Google 圖片｜'+searchQ,false,chosen);
+
+    $('meta').textContent='Google 圖片｜隨機選圖';
+    status('🎯 已從「'+searchQ+'」隨機選出圖片，可以開始畫了。','ok');
   }catch(e){
     console.error('Google random image error:',e);
-    $('meta').textContent='Google 圖片自動抓取失敗';
-    status('⚠️ Google 圖片目前限制自動讀取；已保留網址搜尋與手機選圖備援。','bad');
-    showGoogleFallback(searchQ);
+    $('meta').textContent='Google 圖片暫時無法自動取得';
+    $('imageResult').innerHTML='<div class="tip">⚠️ Google 圖片目前無法自動取得，請稍後再試。</div>';
+    status('⚠️ Google 圖片自動選圖失敗，沒有開啟新的百日繪視窗。','bad');
   }
 }
 
@@ -784,13 +811,11 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
       try{
         if(typeof window.pick==='function'){window.pick();return;}
       }catch(e){console.error(e);}
-      var type=src&&src.value||'google';
-      if(type==='google'||type==='all'){
-        var url='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(text);
-        window.open(url,'_blank');
-        if(status){status.textContent='🔎 已開啟「'+text+'」Google 圖片搜尋；可選圖後回到百日繪。';status.className='ok';}
-      }else{
-        if(status){status.textContent='⚠️ 主程式尚未載入完成，請重新整理頁面後再試。';status.className='bad';}
+      if(typeof window.randomGoogleImage==='function'){
+        window.randomGoogleImage(text);
+      }else if(status){
+        status.textContent='⚠️ 圖片搜尋程式尚未載入完成，請重新整理頁面後再試。';
+        status.className='bad';
       }
     },false);
   }
