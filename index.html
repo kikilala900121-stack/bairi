@@ -43,10 +43,10 @@ body.locked .wrap{user-select:none}
 <option value="scene">一般場景</option><option value="drama">劇情片段</option><option value="action">動作場景</option>
 <option value="portrait">人物特寫</option><option value="fullbody">全身人物</option><option value="anime">動畫角色</option>
 </select>
-<select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="google">🖼️ Google 圖片</option><option value="pinterest">📌 Pinterest</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
+<select id="sourceType"><option value="youtube">🎬 YouTube</option><option value="commons">🖼️ 網路圖片</option><option value="pinterest">📌 Pinterest</option><option value="all">🎲 全部來源</option></select><button class="primary" id="pick">🎲 隨機取景</button>
 <button id="install" class="install">＋ 加到主畫面</button>
 </div>
-<div style="margin-top:9px"><input id="apiKey" type="password" placeholder="YouTube Data API v3 Key（YouTube 才需要）"></div><div class="row" style="margin-top:8px"><input id="googleKey" type="password" placeholder="Google Custom Search API Key（Google 圖片才需要）"><input id="googleCx" placeholder="Google 圖片搜尋引擎 ID（CX）"></div><small>API Key / CX 只儲存在本機瀏覽器。</small>
+<div style="margin-top:9px"><input id="apiKey" type="password" placeholder="YouTube Data API v3 Key（YouTube 才需要）"></div><div style="margin-top:8px;padding:10px 12px;background:#151515;border:1px solid #333;border-radius:12px;color:#bbb">🖼️ <b>網路圖片</b>：改用 Wikimedia Commons 公開圖片搜尋，不需要 Google API Key 或 CX；搜尋結果會直接顯示可用圖片。</div>
 </div>
 <div class="card">
 <div id="playerBox"><div id="player"></div><div id="grid9" class="grid9" aria-hidden="true"></div><div id="compOverlay" class="compOverlay" aria-hidden="true"></div></div>
@@ -198,7 +198,7 @@ async function pick(){
 
   let source=$('sourceType').value;
   if(source==='all'){
-    let choices=['youtube','google','pinterest'];
+    let choices=['youtube','commons','pinterest'];
     source=choices[Math.floor(Math.random()*choices.length)];
   }
 
@@ -258,29 +258,64 @@ async function pickYouTube(q){
   }catch(e){console.error(e);status('YouTube 抽取失敗：'+(e.message||'未知錯誤')+'\n請確認 API Key 有啟用 YouTube Data API v3。','bad')}
 }
 
-async function pickGoogleImage(q){
-  let key=$('googleKey').value.trim(),cx=$('googleCx').value.trim();
-  if(!key||!cx){status('Google 圖片需要 Google Custom Search API Key 與搜尋引擎 ID（CX）。','bad');return}
-  localStorage.setItem('gk',key);localStorage.setItem('gcx',cx);
-  $('playerBox').style.display='none';$('imageResult').style.display='block';
-  status('正在搜尋 Google 圖片……','ok');
+async function pickCommonsImage(q){
+  $('playerBox').style.display='none';
+  $('imageResult').style.display='block';
+  status('正在搜尋網路圖片……','ok');
+
+  let type=$('sceneType').value;
+  let suffix={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物 特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
+  let searchQ=(q+suffix).trim();
 
   try{
-    let url='https://www.googleapis.com/customsearch/v1?key='+encodeURIComponent(key)+'&cx='+encodeURIComponent(cx)+'&searchType=image&num=10&q='+encodeURIComponent(q);
-    let r=await fetch(url),j=await r.json();
-    if(!r.ok)throw new Error(j.error&&j.error.message?j.error.message:'Google 圖片搜尋失敗');
-    let items=(j.items||[]).filter(x=>x.link);
-    if(!items.length){status('找不到 Google 圖片結果，請換一個題材。','bad');return}
+    let api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=30&gsrsearch='+encodeURIComponent(searchQ)+'&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=1400&format=json&origin=*';
+    let r=await fetch(api);
+    let j=await r.json();
+    if(!r.ok)throw new Error('Wikimedia Commons 搜尋失敗');
+    let pages=j.query&&j.query.pages?Object.values(j.query.pages):[];
+    let items=pages.map(function(p){
+      let info=p.imageinfo&&p.imageinfo[0];
+      if(!info)return null;
+      let mime=info.mime||'';
+      let image=info.thumburl||info.url||'';
+      if(!image||mime.indexOf('image/')!==0)return null;
+      return {
+        title:(p.title||'').replace(/^File:/,''),
+        image:image,
+        original:info.descriptionurl||('https://commons.wikimedia.org/wiki/'+encodeURIComponent(p.title||'')),
+        pageid:p.pageid||0
+      };
+    }).filter(Boolean);
+
+    if(!items.length){
+      let fallback='https://commons.wikimedia.org/wiki/Special:MediaSearch?type=image&search='+encodeURIComponent(searchQ);
+      current=null;lastUrl=fallback;
+      $('title').textContent='找不到直接圖片';
+      $('meta').textContent='Wikimedia Commons 搜尋｜'+searchQ;
+      $('time').textContent='搜尋';
+      $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>🖼️ 沒有找到可直接顯示的圖片</b><p class="tip">可以改用較具體的角色、作品名稱，或開啟 Commons 圖片搜尋。</p><button class="primary" onclick="window.open(\''+escAttr(fallback)+'\',\'_blank\',\'noopener\')">開啟圖片搜尋</button></div>';
+      status('目前沒有找到圖片，換一個題材再試。','bad');
+      return;
+    }
+
     let x=items[Math.floor(Math.random()*items.length)];
     let day=new Date().toLocaleDateString('zh-TW');
-    let item={d:day,t:x.title||q,s:0,source:'google',image:x.link,original:x.image&&x.image.contextLink||x.link,query:q,scene:$('sceneType').value};
-    let h=getHistory(),i=h.findIndex(v=>v.d===day);if(i>=0)h[i]=item;else h.push(item);localStorage.setItem('brh',JSON.stringify(h.slice(-100)));history();
-    current=null;lastUrl=item.original;
-    $('title').textContent=item.t;$('meta').textContent='Google 圖片｜'+q;
+    let item={d:day,t:x.title,s:0,source:'commons',image:x.image,original:x.original,query:q,scene:type};
+    let h=getHistory(),i=h.findIndex(v=>v.d===day);
+    if(i>=0)h[i]=item;else h.push(item);
+    localStorage.setItem('brh',JSON.stringify(h.slice(-100)));
+    history();
+
+    current=null;lastUrl=x.original;
+    $('title').textContent=x.title;
+    $('meta').textContent='Wikimedia Commons｜'+q+'｜公開圖片';
     $('time').textContent='圖片';
-    $('imageResult').innerHTML='<a href="'+escAttr(item.original)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.link)+'" alt="'+escAttr(x.title||q)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a><div class="tip" style="margin-top:8px">點圖片可開啟原始來源。</div>';
-    status('已抽到 Google 圖片！','ok');
-  }catch(e){console.error(e);status('Google 圖片抽取失敗：'+(e.message||'未知錯誤')+'\n請確認 Custom Search API 與 CX 設定正確。','bad')}
+    $('imageResult').innerHTML='<a href="'+escAttr(x.original)+'" target="_blank" rel="noopener"><img src="'+escAttr(x.image)+'" alt="'+escAttr(x.title||q)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a><div class="tip" style="margin-top:8px">圖片來自 Wikimedia Commons；點圖片可查看原始檔案頁與授權資訊。</div>';
+    status('已抽到網路圖片！','ok');
+  }catch(e){
+    console.error(e);
+    status('網路圖片抽取失敗：'+(e.message||'未知錯誤')+'\\n請稍後再試或換一個題材。','bad');
+  }
 }
 
 function pickPinterest(q){
@@ -313,7 +348,7 @@ return;
 pick();
 };
 $('open').onclick=function(){if(lastUrl)location.href=lastUrl};
-$('apiKey').value=localStorage.getItem('ytk')||'';$('googleKey').value=localStorage.getItem('gk')||'';$('googleCx').value=localStorage.getItem('gcx')||'';
+$('apiKey').value=localStorage.getItem('ytk')||'';
 history();
 loadToday();
 let deferredPrompt;
