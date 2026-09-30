@@ -507,21 +507,40 @@ function analyzePinterestFile(file){
 function analyzeExternalImage(src,title,isLocal,sourceUrl){
   $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=sourceUrl||(!isLocal?src:'');
   $('title').textContent=title;$('meta').textContent='已回到百日繪｜可自動分析構圖';$('time').textContent='圖片';
-  const proxySrc=!isLocal&&/^https?:\/\//i.test(src)?'https://images.weserv.nl/?url='+encodeURIComponent(src):src;
-  $('imageResult').innerHTML='<img id="externalPinImage" src="'+escAttr(proxySrc)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div class="tip" style="margin-top:8px">Pinterest 圖片已抓取，載入後會自動分析構圖。</div>';
+
+  const candidates=isLocal?[src]:[
+    src,
+    'https://images.weserv.nl/?url='+encodeURIComponent(src),
+    'https://wsrv.nl/?url='+encodeURIComponent(src)
+  ];
+  let idx=0;
+  $('imageResult').innerHTML='<img id="externalPinImage" alt="'+escAttr(title)+'" referrerpolicy="no-referrer" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div id="pinLoadTip" class="tip" style="margin-top:8px">正在載入 Pinterest 圖片……</div>';
   const im=$('imageResult').querySelector('img');
-  if(im){
-    im.onload=function(){drawGuides();autoDetectComposition()};
-    im.onerror=function(){
-      if(!isLocal && im.src!==src){
-        im.onerror=function(){status('已找到 Pinterest 圖片，但圖片伺服器拒絕外部載入。請改用「📱 選取手機圖片」。','bad')};
-        im.src=src;
-      }else status('圖片無法顯示，請改用「📱 選取手機圖片」。','bad');
+  const tip=$('pinLoadTip');
+
+  function tryNext(){
+    if(idx>=candidates.length){
+      if(tip)tip.textContent='圖片伺服器拒絕外部載入。請改用「📱 選取手機圖片」，或重新貼一次 Pin 網址。';
+      status('Pinterest 圖片載入失敗，請改用「📱 選取手機圖片」。','bad');
+      return;
+    }
+    const url=candidates[idx++];
+    if(tip)tip.textContent='正在嘗試第 '+idx+' 種圖片載入方式……';
+    im.onerror=tryNext;
+    im.onload=function(){
+      if(tip)tip.textContent='圖片已載入，正在自動分析構圖……';
+      drawGuides();
+      autoDetectComposition();
     };
+    im.src=url;
   }
+
+  if(im)tryNext();
+
   saveToday({title:title,time:0,duration:0,id:'',source:'pinterest-image',query:$('query').value.trim(),scene:$('sceneType').value,image:src,original:sourceUrl||(!isLocal?src:'')});
   status('正在載入 Pinterest 圖片並分析構圖……','ok');
 }
+
 function pickPinterest(q){
   $('playerBox').style.display='none';
   $('imageStage').style.display='block';
