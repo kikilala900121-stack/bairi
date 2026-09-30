@@ -132,7 +132,29 @@ async function autoDetectComposition(){
   try{
     const cv=document.createElement('canvas'),ctx=cv.getContext('2d',{willReadFrequently:true});
     const W=120,H=80;cv.width=W;cv.height=H;
-    ctx.drawImage(img,0,0,W,H);
+
+    // 外部劇照可能沒有 CORS 標頭，直接讀取 Canvas 像素會觸發 SecurityError。
+    // 因此先用原圖嘗試；若被瀏覽器阻擋，再用公開圖片轉送服務取得可分析副本。
+    async function drawReadable(sourceImg){
+      try{
+        ctx.clearRect(0,0,W,H);
+        ctx.drawImage(sourceImg,0,0,W,H);
+        ctx.getImageData(0,0,1,1);
+        return true;
+      }catch(e){ return false; }
+    }
+    let readable=await drawReadable(img);
+    if(!readable){
+      const proxy=new Image();
+      proxy.crossOrigin='anonymous';
+      const proxyUrl='https://images.weserv.nl/?url='+encodeURIComponent(img.currentSrc||img.src);
+      readable=await new Promise(resolve=>{
+        proxy.onload=async()=>resolve(await drawReadable(proxy));
+        proxy.onerror=()=>resolve(false);
+        proxy.src=proxyUrl;
+      });
+    }
+    if(!readable)throw new Error('CORS');
     const d=ctx.getImageData(0,0,W,H).data;
     const lum=new Float32Array(W*H);
     for(let y=0;y<H;y++)for(let x=0;x<W;x++){let p=(y*W+x)*4;lum[y*W+x]=.2126*d[p]+.7152*d[p+1]+.0722*d[p+2]}
@@ -165,7 +187,22 @@ async function autoDetectComposition(){
     const names={thirds:'三分法',center:'中心構圖',diagonal:'對角線構圖',gold:'黃金螺旋',s:'S 型構圖',c:'C 型構圖',x:'X 型構圖',triangle:'三角形構圖',frame:'框景構圖',leading:'引導線構圖',symmetry:'對稱構圖'};
     $('compResult').textContent='🔍 判定：'+names[type]+'｜'+reason+'（啟發式分析，並非真正的人眼語意判讀）';
   }catch(e){
-    console.error(e);$('compResult').textContent='無法分析這張圖片；可以改用手動構圖。';
+    console.error(e);
+    // 最後保底：即使圖片來源完全拒絕像素讀取，也提供可用的通用構圖，
+    // 不讓使用者卡在「無法分析畫面」。
+    const fallback=['thirds','center','diagonal','leading'][Math.floor(Math.random()*4)];
+    const names={thirds:'三分法',center:'中心構圖',diagonal:'對角線構圖',leading:'引導線構圖'};
+    const reasons={
+      thirds:'圖片來源限制，先以三分法作為安全起始參考',
+      center:'圖片來源限制，先以中心構圖作為安全起始參考',
+      diagonal:'圖片來源限制，先以對角線作為動勢參考',
+      leading:'圖片來源限制，先以引導線作為視線參考'
+    };
+    $('compType').value=fallback;
+    $('compOverlay').className='compOverlay '+fallback+' show';
+    $('compBtn').textContent='📐 關閉構圖';
+    drawGuides();
+    $('compResult').textContent='⚠️ 圖片來源限制，無法讀取像素；已自動套用「'+names[fallback]+'」作為構圖參考。你仍可用下拉選單切換其他構圖。';
   }
 }
 
