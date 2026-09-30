@@ -280,7 +280,7 @@ function makePlayer(){
     width:'100%',
     height:'100%',
     videoId:current?current.id:'',
-    playerVars:{playsinline:1,origin:location.origin,rel:0},
+    playerVars:{playsinline:1,origin:location.origin,rel:0,autoplay:0},
     events:{
       onReady:function(){ready=true;if(current)load()},
       onError:function(e){
@@ -302,7 +302,7 @@ function load(){
     return;
   }
   try{
-    player.loadVideoById({videoId:current.id,startSeconds:current.time||0});
+    player.cueVideoById({videoId:current.id,startSeconds:current.time||0});
     status('已抽到今天的場景！','ok');
   }catch(e){
     status('播放器載入失敗，請重新整理頁面後再試。','bad');
