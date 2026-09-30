@@ -483,36 +483,92 @@ async function analyzePinterestUrl(){
   const input=$('pinImageUrl');
   const url=(input&&input.value||'').trim();
   if(!url){status('請先貼上 Pinterest Pin 網址。','bad');return}
-  if(!/^https?:\/\//i.test(url)){status('網址格式不正確，請貼上完整的 Pinterest Pin 網址。','bad');return}
-  const isPinPage=/pinterest\.(com|tw)\/pin\//i.test(url);
-  if(isPinPage){
-    status('正在讀取 Pinterest Pin，尋找其中的圖片……','ok');
-    try{
-      const readerUrl='https://r.jina.ai/http://'+url.replace(/^https?:\/\//i,'');
-      const rr=await fetch(readerUrl,{headers:{'Accept':'text/plain'}});
-      if(!rr.ok)throw new Error('Pin 頁面讀取失敗');
-      const text=await rr.text();
-      const matches=[],add=function(v){
-        if(!v)return;
-        let s=v.replace(/\\u002F/g,'/').replace(/\\\//g,'/').replace(/&amp;/g,'&');
-        if(/^https?:\/\//i.test(s)&&!matches.includes(s))matches.push(s);
-      };
-      let m;
-      const pinRe=/https?:\/\/(?:i\.)?pinimg\.com\/[^\s"'<>\)]+/gi;
-      while((m=pinRe.exec(text))&&matches.length<20)add(m[0]);
-      const ogRe=/(?:og:image|twitter:image)[^\n]{0,300}?(https?:\/\/[^\s"'<>\)]+)/gi;
-      while((m=ogRe.exec(text))&&matches.length<20)add(m[1]);
-      if(!matches.length)throw new Error('找不到 Pin 圖片');
-      const imageUrl=matches.find(v=>/pinimg\.com/i.test(v))||matches[0];
-      analyzeExternalImage(imageUrl,'Pinterest Pin 圖片',false,url);
-    }catch(e){
-      console.error(e);
-      status('無法自動抓取這個 Pin 的圖片；請改用「📱 選取手機圖片」。','bad');
-    }
+  if(!/^https?:\/\//i.test(url)){status('網址格式不正確，請貼上完整網址。','bad');return}
+
+  // 若使用者貼的是 pinimg 圖片網址，直接下載，不必解析 Pin 頁面。
+  if(/pinimg\.com/i.test(url) && /\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(url)){
+    analyzeExternalImage(url,'Pinterest 圖片',false,url);
     return;
   }
-  analyzeExternalImage(url,'Pinterest 圖片',false,url);
+
+  const isPinPage=/pinterest\.(?:com|tw|co\.uk|ca|de|fr|jp|kr|com\.au)\/pin\//i.test(url);
+  if(!isPinPage){
+    analyzeExternalImage(url,'Pinterest 圖片',false,url);
+    return;
+  }
+
+  status('正在尋找這個 Pin 的原始圖片……','ok');
+
+  try{
+    const candidates=[];
+    const add=function(v){
+      if(!v)return;
+      let s=String(v)
+        .replace(/\\u002F/g,'/')
+        .replace(/\\\//g,'/')
+        .replace(/&amp;/g,'&')
+        .replace(/\\u0026/g,'&');
+      try{s=JSON.parse('"'+s.replace(/"/g,'\\\"')+'"')}catch(e){}
+      s=s.replace(/\\u002F/g,'/');
+      if(/^https?:\/\//i.test(s) && /pinimg\.com/i.test(s) && !candidates.includes(s))candidates.push(s);
+    };
+
+    // 1. Pinterest 的公開 oEmbed 介面：若可用，通常可直接取得縮圖/嵌入資料。
+    const oe='https://www.pinterest.com/oembed.json?url='+encodeURIComponent(url);
+    try{
+      const rr=await fetch(oe,{mode:'cors',cache:'no-store'});
+      if(rr.ok){
+        const data=await rr.json();
+        add(data.thumbnail_url);
+        add(data.image);
+        const html=String(data.html||'');
+        let m; const re=/https?:\\/\\/[^"'<> ]*pinimg\\.com[^"'<> ]+/gi;
+        while((m=re.exec(html))&&candidates.length<20)add(m[0]);
+      }
+    }catch(e){}
+
+    // 2. 透過公開閱讀器取得 Pin 頁面的 metadata / HTML。
+    if(!candidates.length){
+      const readerUrls=[
+        'https://r.jina.ai/http://'+url.replace(/^https?:\/\//i,''),
+        'https://r.jina.ai/https://'+url.replace(/^https?:\/\//i,'')
+      ];
+      for(const readerUrl of readerUrls){
+        try{
+          const rr=await fetch(readerUrl,{mode:'cors',cache:'no-store',headers:{'Accept':'text/plain'}});
+          if(!rr.ok)continue;
+          const text=await rr.text();
+          let m;
+          const patterns=[
+            /https?:\\/\\/(?:i\\.)?pinimg\\.com\\/[^\\s"'<>\\)]+/gi,
+            /https?:\\/\\/[^\\s"'<>\\)]+pinimg\\.com[^\\s"'<>\\)]+/gi
+          ];
+          for(const re of patterns){
+            while((m=re.exec(text))&&candidates.length<30)add(m[0]);
+          }
+          const metaRe=/(?:og:image|twitter:image)[^\\n]{0,500}?(https?:\\/\\/[^\\s"'<>\\)]+)/gi;
+          while((m=metaRe.exec(text))&&candidates.length<30)add(m[1]);
+          if(candidates.length)break;
+        }catch(e){}
+      }
+    }
+
+    if(!candidates.length){
+      throw new Error('Pinterest 沒有提供可直接取得的圖片網址');
+    }
+
+    // 優先使用高解析度 pinimg 圖片。
+    const best=candidates.find(v=>/1200x|originals/i.test(v)) ||
+               candidates.find(v=>/736x|564x/i.test(v)) ||
+               candidates[0];
+
+    analyzeExternalImage(best,'Pinterest Pin 圖片',false,url);
+  }catch(e){
+    console.error(e);
+    status('這個 Pin 無法自動取得圖片。Pinterest 目前限制第三方直接讀取部分 Pin；請改用「📱 選取手機圖片」，或在 Pinterest 開啟圖片後複製「圖片網址」。','bad');
+  }
 }
+
 function analyzePinterestFile(file){
   if(!file)return;
   if(!file.type||!file.type.startsWith('image/')){status('請選擇 JPG、PNG、WEBP 等圖片檔。','bad');return}
