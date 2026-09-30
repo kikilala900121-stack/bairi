@@ -676,7 +676,7 @@ function showGoogleImagePicker(searchQ,url){
   status('已準備好「'+searchQ+'」主題，按上方「🎲 隨機取景」即可抽圖。','ok');
 }
 
-async function randomGoogleImage(q){
+window.randomGoogleImage=async function(q){
   const type=$('sceneType').value;
   const extra={scene:'',drama:' 劇情片段',action:' 動作場景',portrait:' 人物特寫',fullbody:' 全身人物',anime:' 動畫角色'}[type]||'';
   const searchQ=(q||'').trim()+extra;
@@ -811,11 +811,43 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
       try{
         if(typeof window.pick==='function'){window.pick();return;}
       }catch(e){console.error(e);}
-      if(typeof window.randomGoogleImage==='function'){
-        window.randomGoogleImage(text);
-      }else if(status){
-        status.textContent='⚠️ 圖片搜尋程式尚未載入完成，請重新整理頁面後再試。';
-        status.className='bad';
+      try{
+        if(typeof window.randomGoogleImage==='function'){
+          window.randomGoogleImage(text);
+        }else{
+          var stage=document.getElementById('imageStage');
+          var result=document.getElementById('imageResult');
+          if(stage)stage.style.display='block';
+          if(result)result.innerHTML='<div class="tip">🎲 正在搜尋「'+text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'」……</div>';
+          if(status){status.textContent='🎲 正在搜尋圖片……';status.className='ok';}
+          var reader='https://r.jina.ai/http://www.google.com/search?tbm=isch&q='+encodeURIComponent(text);
+          fetch(reader).then(function(r){return r.text()}).then(function(body){
+            var urls=[],seen={};
+            body.split(/[\s"'<>]+/).forEach(function(v){
+              var u=v.replace(/\\u002F/g,'/').replace(/\\\//g,'/').replace(/&amp;/g,'&');
+              var low=u.toLowerCase();
+              if((u.indexOf('http://')===0||u.indexOf('https://')===0)&&
+                 (low.indexOf('gstatic.com')>=0||/\.(jpg|jpeg|png|webp)([?#]|$)/i.test(u))&&
+                 low.indexOf('google.com/search')<0&&!seen[u]){
+                seen[u]=1;urls.push(u);
+              }
+            });
+            if(!urls.length)throw new Error('沒有圖片');
+            var chosen=urls[Math.floor(Math.random()*urls.length)];
+            if(typeof window.analyzeExternalImage==='function'){
+              window.analyzeExternalImage(chosen,'Google 圖片｜'+text,false,chosen);
+            }else if(result){
+              result.innerHTML='<img src="'+chosen.replace(/"/g,'&quot;')+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000">';
+              if(status){status.textContent='🎯 已隨機選圖。';status.className='ok';}
+            }
+          }).catch(function(err){
+            console.error(err);
+            if(status){status.textContent='⚠️ Google 圖片暫時無法取得，請稍後再試。';status.className='bad';}
+          });
+        }
+      }catch(e){
+        console.error(e);
+        if(status){status.textContent='⚠️ 圖片搜尋發生錯誤。';status.className='bad';}
       }
     },false);
   }
