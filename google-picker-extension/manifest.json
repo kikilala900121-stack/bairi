@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "百日繪｜Google 圖片一鍵選圖",
+  "version": "1.0.0",
+  "description": "在 Google 圖片點選圖片後，一鍵帶回百日繪。",
+  "permissions": [],
+  "host_permissions": ["https://www.google.com/search*","https://www.google.com.tw/search*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.google.com/search*","https://www.google.com.tw/search*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
