@@ -204,7 +204,9 @@ async function pick(){
     $('query').focus();
     return;
   }
-  if(getHistory().some(function(x){return x.d===new Date().toLocaleDateString('zh-TW')})){
+  let today=new Date().toLocaleDateString('zh-TW');
+  let todayRecord=getHistory().find(function(x){return x.d===today});
+  if(todayRecord&&todayRecord.id){
     status('今天已經抽過題目了；明天再抽新題。','bad');
     return;
   }
@@ -263,7 +265,8 @@ async function pick(){
 $('pick').onclick=pick;
 $('again').onclick=function(){
 let today=new Date().toLocaleDateString('zh-TW');
-if(getHistory().some(function(x){return x.d===today})){
+let todayRecord=getHistory().find(function(x){return x.d===today});
+if(todayRecord&&todayRecord.id){
 status('今天已經有題目了；明天再抽新題。若要回看其他天，請點選「100 日紀錄」。','bad');
 return;
 }
