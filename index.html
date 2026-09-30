@@ -68,7 +68,7 @@ function status(s,c){$('status').textContent=s;$('status').className=c||''}
 function history(){
 let h=getHistory(),today=new Date().toLocaleDateString('zh-TW');
 $('history').innerHTML=h.length?h.slice().reverse().map(function(x,i){
-let dayNo=h.length-i,can=!!x.id||!!x.image||x.source==='pinterest';
+let dayNo=h.length-i,can=!!x.id||!!x.image||!!x.original||x.source==='pinterest';
 return '<button class="'+(x.d===today?'currentDay':'')+'" '+(can?'onclick="loadDay('+dayNo+')"':'')+'>'+dayNo+'. '+esc(x.d)+'｜'+esc(x.source||'youtube')+'｜'+esc(x.t)+'｜'+((x.source==='google'||x.source==='commons'||x.source==='tvmaze'||x.source==='pinterest-image')?'圖片':x.source==='pinterest'?'Pinterest':fmt(x.s))+(can?'':'｜舊紀錄需重新抽取')+'</button>';
 }).join(''):'尚無紀錄';
 $('day').textContent='第 '+Math.min(h.length+1,100)+' / 100 天';
