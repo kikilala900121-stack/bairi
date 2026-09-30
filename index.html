@@ -54,7 +54,7 @@ body.locked .wrap{user-select:none}
 <div id="status">輸入題材後選擇來源，再按「隨機取景」。</div><div id="imageStage" class="imageStage" style="display:none"><div id="imageResult"></div><canvas id="guideCanvas" aria-hidden="true"></canvas></div>
 <div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="compBtn">📐 構圖模式</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div><div class="timer"><select id="timerPreset"><option value="300">5 分鐘</option><option value="900" selected>15 分鐘</option><option value="1800">30 分鐘</option><option value="3600">60 分鐘</option></select><div><div class="timerDisplay" id="timerDisplay">15:00</div><div class="timerProgress"><i id="timerProgress"></i></div></div><div class="timerBtns"><button id="timerStart">▶ 開始</button><button id="timerReset">↺ 重設</button></div></div>
 </div>
-<div class="card"><b>📐 AI 構圖判讀</b><div class="tip">自動分析目前畫面中的亮暗分布與主要視覺方向，推測最接近的構圖方式，再把輔助線畫上去。</div><div class="row" style="margin-top:9px"><button id="autoComp" class="primary">🔍 自動判斷構圖</button><select id="compType"><option value="thirds">三分法</option><option value="center">中心十字</option><option value="diagonal">對角線</option><option value="gold">黃金構圖</option></select><button id="compApply">手動顯示</button></div><div id="compResult" class="tip" style="margin-top:8px">尚未分析</div></div><div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
+<div class="card"><b>📐 AI 構圖判讀</b><div class="tip">自動分析目前畫面中的亮暗分布與主要視覺方向，推測最接近的構圖方式，再把輔助線畫上去。</div><div class="row" style="margin-top:9px"><button id="autoComp" class="primary">🔍 自動判斷構圖</button><select id="compType"><option value="thirds">三分法</option><option value="center">中心構圖</option><option value="diagonal">對角線構圖</option><option value="gold">黃金螺旋</option><option value="s">S 型構圖</option><option value="c">C 型構圖</option><option value="x">X 型構圖</option><option value="triangle">三角形構圖</option><option value="frame">框景構圖</option><option value="leading">引導線構圖</option><option value="symmetry">對稱構圖</option></select><button id="compApply">手動顯示</button></div><div id="compResult" class="tip" style="margin-top:8px">尚未分析</div></div><div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
 <div class="card"><b>📅 100 日紀錄</b><div id="history" class="history">尚無紀錄</div></div>
 </div>
 <div class="lockLayer" id="lockLayer"><button class="unlock" id="unlockBtn">🔓 解鎖畫面</button></div>
@@ -151,12 +151,18 @@ async function autoDetectComposition(){
     let edge=Math.sqrt(vx+vy),type='thirds',reason='畫面明暗重心接近三分線';
     if(Math.abs(px-.5)<.11 && Math.abs(py-.5)<.11 && edge<55){type='center';reason='主要明暗分布集中在畫面中央'}
     else if(Math.max(diag,anti)>edge*1.35){type='diagonal';reason='畫面邊緣方向性較強，呈現明顯斜向結構'}
+    
+    else if(vx<180 && vy<180 && Math.abs(px-.5)<.10 && Math.abs(py-.5)<.10){type='symmetry';reason='水平與垂直明暗分布接近對稱'}
+    else if(diag>edge*1.7 && anti>edge*1.7){type='x';reason='兩組相反方向的強烈斜向結構交會'}
+    else if(Math.abs(px-.5)>.22 && Math.abs(py-.5)>.18){type='c';reason='主要視覺重心沿邊緣彎曲分布，接近 C 型引導'}
+    else if((px<.30&&py>.60)||(px>.70&&py<.40)){type='s';reason='主要視覺重心呈對角流動，接近 S 型引導'}
+    else if(Math.max(diag,anti)>edge*1.35){type='leading';reason='畫面存在明顯方向性，引導線特徵較強'}
     else if(Math.abs(px-.382)<.16 || Math.abs(px-.618)<.16 || Math.abs(py-.382)<.16 || Math.abs(py-.618)<.16){type='gold';reason='主要視覺重心接近黃金分割區域'}
     $('compType').value=type;
     $('compOverlay').className='compOverlay '+type+' show';
     $('compBtn').textContent='📐 關閉構圖';
     drawGuides();
-    const names={thirds:'三分法',center:'中心構圖',diagonal:'對角線構圖',gold:'黃金構圖'};
+    const names={thirds:'三分法',center:'中心構圖',diagonal:'對角線構圖',gold:'黃金螺旋',s:'S 型構圖',c:'C 型構圖',x:'X 型構圖',triangle:'三角形構圖',frame:'框景構圖',leading:'引導線構圖',symmetry:'對稱構圖'};
     $('compResult').textContent='🔍 判定：'+names[type]+'｜'+reason+'（啟發式分析，並非真正的人眼語意判讀）';
   }catch(e){
     console.error(e);$('compResult').textContent='無法分析這張圖片；可以改用手動構圖。';
@@ -181,6 +187,29 @@ function drawGuides(){
     else if(t==='center'){line(x+w/2,y,x+w/2,y+h,'rgba(255,255,255,.95)');line(x,y+h/2,x+w,y+h/2,'rgba(255,255,255,.95)')}
     else if(t==='diagonal'){line(x,y,x+w,y+h,'rgba(100,200,255,.95)');line(x+w,y,x,y+h,'rgba(100,200,255,.95)')}
     else if(t==='gold'){ctx.strokeStyle='rgba(255,190,70,.95)';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(x+w/2,y+h/2,w*.32,h*.40,-.21,0,Math.PI*2);ctx.stroke()}
+    else if(t==='s'||t==='c'){
+      ctx.strokeStyle='rgba(80,220,255,.95)';ctx.lineWidth=3;ctx.beginPath();
+      if(t==='s'){ctx.moveTo(x+w*.18,y+h*.88);ctx.bezierCurveTo(x+w*.78,y+h*.82,x+w*.18,y+h*.38,x+w*.80,y+h*.12)}
+      else{ctx.moveTo(x+w*.80,y+h*.12);ctx.bezierCurveTo(x+w*.22,y+h*.08,x+w*.12,y+h*.42,x+w*.35,y+h*.88)}
+      ctx.stroke();
+    }
+    else if(t==='x'){
+      line(x,y,x+w,y+h,'rgba(255,100,180,.95)');line(x+w,y,x,y+h,'rgba(255,100,180,.95)');
+    }
+    else if(t==='triangle'){
+      ctx.strokeStyle='rgba(255,210,80,.95)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x+w*.5,y+h*.10);ctx.lineTo(x+w*.12,y+h*.88);ctx.lineTo(x+w*.88,y+h*.88);ctx.closePath();ctx.stroke();
+    }
+    else if(t==='frame'){
+      ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=3;ctx.strokeRect(x+w*.08,y+h*.08,w*.84,h*.84);
+      ctx.lineWidth=8;ctx.strokeStyle='rgba(255,255,255,.35)';ctx.strokeRect(x+w*.02,y+h*.02,w*.96,h*.96);
+    }
+    else if(t==='leading'){
+      line(x+w*.05,y+h*.9,x+w*.50,y+h*.50,'rgba(80,220,255,.95)');line(x+w*.95,y+h*.9,x+w*.50,y+h*.50,'rgba(80,220,255,.95)');
+      ctx.fillStyle='rgba(255,210,80,.95)';ctx.beginPath();ctx.arc(x+w*.50,y+h*.50,7,0,Math.PI*2);ctx.fill();
+    }
+    else if(t==='symmetry'){
+      line(x+w*.5,y,x+w*.5,y+h,'rgba(255,255,255,.9)');line(x,y+h*.5,x+w,y+h*.5,'rgba(255,255,255,.55)');
+    }
   }
 }
 function setLocked(on){
