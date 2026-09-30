@@ -466,7 +466,7 @@ function analyzePinterestUrl(){
   const input=$('pinImageUrl');
   const url=(input&&input.value||'').trim();
   if(!url){status('請先貼上 Pinterest 圖片網址。','bad');return}
-  if(!/^https?:\\/\\//i.test(url)){status('圖片網址格式不正確，請貼上以 http:// 或 https:// 開頭的網址。','bad');return}
+  if(!/^https?:\/\//i.test(url)){status('圖片網址格式不正確，請貼上以 http:// 或 https:// 開頭的網址。','bad');return}
   analyzeExternalImage(url,'Pinterest 圖片',false);
 }
 function analyzePinterestFile(file){
