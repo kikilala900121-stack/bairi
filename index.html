@@ -455,19 +455,46 @@ async function pickTVMazeImage(q){
 function showPinterestPicker(searchQ,url){
   $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;
   $('title').textContent='Pinterest｜'+searchQ;$('meta').textContent='先在 Pinterest 選圖，再回百日繪分析';$('time').textContent='Pinterest';
-  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest → 百日繪</b><p class="tip">先開啟 Pinterest 選一張想畫的圖。回到百日繪後，可以貼上圖片網址；如果 Pinterest 不方便取得圖片網址，也可以先把圖片存到手機，再用「選取手機圖片」。</p><div class="row" style="margin-top:10px"><button class="primary" id="pinOpenBtn">📌 開啟 Pinterest 選圖</button></div><div style="margin-top:14px"><input id="pinImageUrl" placeholder="貼上 Pinterest 圖片網址（https://...）" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="pinAnalyzeUrlBtn">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="pinImageFile" type="file" accept="image/*" style="display:none"></label></div><div class="tip" style="margin-top:9px">提示：Pinterest 的 Pin 頁面網址不一定就是圖片檔網址；若貼 Pin 網址無法顯示，請下載圖片後用「選取手機圖片」。</div></div>';
+  $('imageResult').innerHTML='<div style="padding:18px;background:#151515;border:1px solid #333;border-radius:14px"><b>📌 Pinterest → 百日繪</b><p class="tip">先開啟 Pinterest 選一張想畫的圖。回到百日繪後，可以貼上圖片網址；如果 Pinterest 不方便取得圖片網址，也可以先把圖片存到手機，再用「選取手機圖片」。</p><div class="row" style="margin-top:10px"><button class="primary" id="pinOpenBtn">📌 開啟 Pinterest 選圖</button></div><div style="margin-top:14px"><input id="pinImageUrl" placeholder="貼上 Pinterest Pin 網址（例如 https://www.pinterest.com/pin/.../）或圖片網址" style="width:100%;min-width:0"></div><div class="row" style="margin-top:9px"><button class="primary" id="pinAnalyzeUrlBtn">🔍 貼網址並分析</button><label style="display:inline-flex;align-items:center;gap:8px;border:1px solid #444;padding:12px;border-radius:11px;background:#252525;cursor:pointer">📱 選取手機圖片<input id="pinImageFile" type="file" accept="image/*" style="display:none"></label></div><div class="tip" style="margin-top:9px">提示：Pinterest 的 Pin 頁面網址不一定就是圖片檔網址；若貼 Pin 網址無法顯示，請下載圖片後用「選取手機圖片」。</div></div>';
   $('pinOpenBtn').onclick=function(){window.open(url,'_blank','noopener')};
   $('pinAnalyzeUrlBtn').onclick=analyzePinterestUrl;
   $('pinImageFile').onchange=function(){analyzePinterestFile(this.files[0])};
   saveToday({title:'Pinterest｜'+searchQ,time:0,duration:0,id:'',source:'pinterest',query:$('query').value.trim(),scene:$('sceneType').value,original:url});
   status('已開啟 Pinterest 選圖流程。選好圖後回來即可貼網址或選手機圖片。','ok');
 }
-function analyzePinterestUrl(){
+async function analyzePinterestUrl(){
   const input=$('pinImageUrl');
   const url=(input&&input.value||'').trim();
-  if(!url){status('請先貼上 Pinterest 圖片網址。','bad');return}
-  if(!/^https?:\/\//i.test(url)){status('圖片網址格式不正確，請貼上以 http:// 或 https:// 開頭的網址。','bad');return}
-  analyzeExternalImage(url,'Pinterest 圖片',false);
+  if(!url){status('請先貼上 Pinterest Pin 網址。','bad');return}
+  if(!/^https?:\/\//i.test(url)){status('網址格式不正確，請貼上完整的 Pinterest Pin 網址。','bad');return}
+  const isPinPage=/pinterest\.(com|tw)\/pin\//i.test(url);
+  if(isPinPage){
+    status('正在讀取 Pinterest Pin，尋找其中的圖片……','ok');
+    try{
+      const readerUrl='https://r.jina.ai/http://'+url.replace(/^https?:\/\//i,'');
+      const rr=await fetch(readerUrl,{headers:{'Accept':'text/plain'}});
+      if(!rr.ok)throw new Error('Pin 頁面讀取失敗');
+      const text=await rr.text();
+      const matches=[],add=function(v){
+        if(!v)return;
+        let s=v.replace(/\\u002F/g,'/').replace(/\\\//g,'/').replace(/&amp;/g,'&');
+        if(/^https?:\/\//i.test(s)&&!matches.includes(s))matches.push(s);
+      };
+      let m;
+      const pinRe=/https?:\/\/(?:i\.)?pinimg\.com\/[^\s"'<>\)]+/gi;
+      while((m=pinRe.exec(text))&&matches.length<20)add(m[0]);
+      const ogRe=/(?:og:image|twitter:image)[^\n]{0,300}?(https?:\/\/[^\s"'<>\)]+)/gi;
+      while((m=ogRe.exec(text))&&matches.length<20)add(m[1]);
+      if(!matches.length)throw new Error('找不到 Pin 圖片');
+      const imageUrl=matches.find(v=>/pinimg\.com/i.test(v))||matches[0];
+      analyzeExternalImage(imageUrl,'Pinterest Pin 圖片',false,url);
+    }catch(e){
+      console.error(e);
+      status('無法自動抓取這個 Pin 的圖片；請改用「📱 選取手機圖片」。','bad');
+    }
+    return;
+  }
+  analyzeExternalImage(url,'Pinterest 圖片',false,url);
 }
 function analyzePinterestFile(file){
   if(!file)return;
@@ -477,26 +504,23 @@ function analyzePinterestFile(file){
   reader.onerror=function(){status('圖片讀取失敗，請重新選取。','bad')};
   reader.readAsDataURL(file);
 }
-function analyzeExternalImage(src,title,isLocal){
-  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=isLocal?'':src;
+function analyzeExternalImage(src,title,isLocal,sourceUrl){
+  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=sourceUrl||(!isLocal?src:'');
   $('title').textContent=title;$('meta').textContent='已回到百日繪｜可自動分析構圖';$('time').textContent='圖片';
-  const safeSrc=escAttr(src);
-  const proxySrc=!isLocal&&/^https?:\\/\\//i.test(src)?'https://images.weserv.nl/?url='+encodeURIComponent(src):src;
-  $('imageResult').innerHTML='<img id="externalPinImage" src="'+escAttr(proxySrc)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div class="tip" style="margin-top:8px">圖片載入後會自動分析構圖。若 Pinterest 網址是 Pin 頁面而不是圖片檔，請改用「選取手機圖片」。</div>';
+  const proxySrc=!isLocal&&/^https?:\/\//i.test(src)?'https://images.weserv.nl/?url='+encodeURIComponent(src):src;
+  $('imageResult').innerHTML='<img id="externalPinImage" src="'+escAttr(proxySrc)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div class="tip" style="margin-top:8px">Pinterest 圖片已抓取，載入後會自動分析構圖。</div>';
   const im=$('imageResult').querySelector('img');
   if(im){
     im.onload=function(){drawGuides();autoDetectComposition()};
     im.onerror=function(){
       if(!isLocal && im.src!==src){
-        im.onerror=function(){status('這個網址不是可直接讀取的圖片，或 Pinterest 阻擋外部載入。請在 Pinterest 把圖片存到手機，再用「📱 選取手機圖片」。','bad')};
+        im.onerror=function(){status('已找到 Pinterest 圖片，但圖片伺服器拒絕外部載入。請改用「📱 選取手機圖片」。','bad')};
         im.src=src;
-      }else{
-        status('圖片網址無法直接顯示。請把圖片存到手機後，再用「📱 選取手機圖片」。','bad');
-      }
+      }else status('圖片無法顯示，請改用「📱 選取手機圖片」。','bad');
     };
   }
-  saveToday({title:title,time:0,duration:0,id:'',source:'pinterest-image',query:$('query').value.trim(),scene:$('sceneType').value,image:src,original:isLocal?'':src});
-  status('正在載入圖片並分析構圖……','ok');
+  saveToday({title:title,time:0,duration:0,id:'',source:'pinterest-image',query:$('query').value.trim(),scene:$('sceneType').value,image:src,original:sourceUrl||(!isLocal?src:'')});
+  status('正在載入 Pinterest 圖片並分析構圖……','ok');
 }
 function pickPinterest(q){
   $('playerBox').style.display='none';
