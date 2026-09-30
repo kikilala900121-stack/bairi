@@ -501,7 +501,11 @@ function analyzePinterestFile(file){
   if(!file.type||!file.type.startsWith('image/')){status('請選擇 JPG、PNG、WEBP 等圖片檔。','bad');return}
   const reader=new FileReader();
   reader.onload=function(){analyzeExternalImage(reader.result,'Pinterest 選取圖片',true)};
-  reader.onerror=function(){status('圖片讀async function fetchImageData(src){
+  reader.onerror=function(){status('圖片讀取失敗，請重新選取。','bad')};
+  reader.readAsDataURL(file);
+}
+
+async function fetchImageData(src){
   const attempts=[
     {url:src,mode:'blob'},
     {url:'https://wsrv.nl/?url='+encodeURIComponent(src)+'&output=jpg&encoding=base64',mode:'text'},
@@ -560,8 +564,6 @@ async function analyzeExternalImage(src,title,isLocal,sourceUrl){
     $('meta').textContent='無法取得圖片資料';
     status('Pinterest 圖片下載失敗。百日繪已嘗試直接下載與圖片轉送服務；請重新貼一次 Pin 網址。','bad');
   }
-}c:'')});
-  status('正在載入 Pinterest 圖片並分析構圖……','ok');
 }
 
 function pickPinterest(q){
