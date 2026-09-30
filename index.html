@@ -14,7 +14,7 @@ h1{margin:0;font-size:28px}.sub{color:#999;margin:4px 0 16px}
 .card{background:#1b1b1b;border:1px solid #333;border-radius:18px;padding:16px;margin:12px 0}
 .row{display:flex;gap:9px;flex-wrap:wrap}input,select,button{font:inherit;border-radius:11px;border:1px solid #444;padding:12px;background:#252525;color:#fff}
 input{flex:1;min-width:220px}button{cursor:pointer}.primary{background:#fff;color:#111;border-color:#fff;font-weight:700}
-#playerBox{aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;position:relative}#player{width:100%;height:100%}
+.imageStage{position:relative;margin-top:12px;border-radius:14px;overflow:hidden;background:#000;line-height:0}.imageStage #imageResult{position:relative;z-index:1}.imageStage #imageResult img{display:block;width:100%;max-height:70vh;object-fit:contain;background:#000}.imageStage #guideCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:20}#playerBox{aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;position:relative}#player{width:100%;height:100%}
 .grid9{position:absolute;inset:0;display:none;pointer-events:none;z-index:4}
 .grid9.show{display:block}.compOverlay{position:absolute;inset:0;display:none;pointer-events:none;z-index:5}.compOverlay.show{display:block}.compOverlay.thirds:before{content:"";position:absolute;inset:0;background:linear-gradient(to right,transparent 33%,rgba(255,210,80,.9) 33.1%,rgba(255,210,80,.9) 33.25%,transparent 33.35%,transparent 66.65%,rgba(255,210,80,.9) 66.75%,rgba(255,210,80,.9) 66.9%,transparent 67%),linear-gradient(to bottom,transparent 33%,rgba(255,210,80,.9) 33.1%,rgba(255,210,80,.9) 33.25%,transparent 33.35%,transparent 66.65%,rgba(255,210,80,.9) 66.75%,rgba(255,210,80,.9) 66.9%,transparent 67%)}.compOverlay.center:before,.compOverlay.center:after{content:"";position:absolute;background:rgba(255,255,255,.85)}.compOverlay.center:before{left:0;right:0;top:50%;height:2px}.compOverlay.center:after{top:0;bottom:0;left:50%;width:2px}.compOverlay.diagonal:before{content:"";position:absolute;inset:0;background:linear-gradient(33deg,transparent 49.7%,rgba(120,200,255,.9) 50%,transparent 50.3%),linear-gradient(-33deg,transparent 49.7%,rgba(120,200,255,.9) 50%,transparent 50.3%)}.compOverlay.gold:before{content:"";position:absolute;inset:10% 18%;border:2px solid rgba(255,190,70,.85);border-radius:50%;transform:rotate(-12deg)}
 .grid9:before,.grid9:after{content:"";position:absolute;inset:0}
@@ -51,7 +51,7 @@ body.locked .wrap{user-select:none}
 <div class="card">
 <div id="playerBox"><div id="player"></div><div id="grid9" class="grid9" aria-hidden="true"></div><div id="compOverlay" class="compOverlay" aria-hidden="true"></div></div>
 <div class="grid"><div><b id="title">尚未抽取</b><div><small id="meta"></small></div></div><div class="time" id="time">--:--</div></div>
-<div id="status">輸入題材後選擇來源，再按「隨機取景」。</div><div id="imageResult" style="display:none;margin-top:12px"></div>
+<div id="status">輸入題材後選擇來源，再按「隨機取景」。</div><div id="imageStage" class="imageStage" style="display:none"><div id="imageResult"></div><canvas id="guideCanvas" aria-hidden="true"></canvas></div>
 <div class="row" style="margin-top:10px"><button id="again">↻ 再抽一次</button><button id="gridBtn">▦ 九宮格</button><button id="compBtn">📐 構圖模式</button><button id="lockBtn">🔒 鎖定畫面</button><button id="open">↗ YouTube</button></div><div class="timer"><select id="timerPreset"><option value="300">5 分鐘</option><option value="900" selected>15 分鐘</option><option value="1800">30 分鐘</option><option value="3600">60 分鐘</option></select><div><div class="timerDisplay" id="timerDisplay">15:00</div><div class="timerProgress"><i id="timerProgress"></i></div></div><div class="timerBtns"><button id="timerStart">▶ 開始</button><button id="timerReset">↺ 重設</button></div></div>
 </div>
 <div class="card"><b>📐 構圖模式</b><div class="tip">三分法、中心十字、對角線、黃金構圖。</div><div class="row" style="margin-top:9px"><select id="compType"><option value="thirds">三分法</option><option value="center">中心十字</option><option value="diagonal">對角線</option><option value="gold">黃金構圖</option></select><button id="compApply">顯示構圖線</button></div></div><div class="card"><b>🎨 今日畫法</b><div class="tip">先抓人物動作、構圖與光影，再處理臉部與服裝。抽到不適合的鏡頭就按「再抽一次」。</div></div>
@@ -124,15 +124,35 @@ catch(e){status('畫面鎖定已開啟，但瀏覽器未允許保持螢幕常亮
 async function releaseWakeLock(){
 try{if(wakeLock){await wakeLock.release();wakeLock=null}}catch(e){}
 }
+function drawGuides(){
+  const canvas=$('guideCanvas'),stage=$('imageStage'),img=$('imageResult')?.querySelector('img');
+  if(!canvas||!stage||!img||stage.style.display==='none'||!img.naturalWidth){return}
+  const sr=stage.getBoundingClientRect(),ir=img.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.round(sr.width*dpr));canvas.height=Math.max(1,Math.round(sr.height*dpr));
+  const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,sr.width,sr.height);
+  const x=ir.left-sr.left,y=ir.top-sr.top,w=ir.width,h=ir.height;
+  const line=(a,b,c,d,color)=>{ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a,b);ctx.lineTo(c,d);ctx.stroke()};
+  if($('grid9').classList.contains('show')){
+    line(x+w/3,y,x+w/3,y+h,'rgba(255,255,255,.82)');line(x+2*w/3,y,x+2*w/3,y+h,'rgba(255,255,255,.82)');
+    line(x,y+h/3,x+w,y+h/3,'rgba(255,255,255,.82)');line(x,y+2*h/3,x+w,y+2*h/3,'rgba(255,255,255,.82)');
+  }
+  if($('compOverlay').classList.contains('show')){
+    const t=$('compType').value;
+    if(t==='thirds'){line(x+w/3,y,x+w/3,y+h,'rgba(255,210,80,.95)');line(x+2*w/3,y,x+2*w/3,y+h,'rgba(255,210,80,.95)');line(x,y+h/3,x+w,y+h/3,'rgba(255,210,80,.95)');line(x,y+2*h/3,x+w,y+2*h/3,'rgba(255,210,80,.95)')}
+    else if(t==='center'){line(x+w/2,y,x+w/2,y+h,'rgba(255,255,255,.95)');line(x,y+h/2,x+w,y+h/2,'rgba(255,255,255,.95)')}
+    else if(t==='diagonal'){line(x,y,x+w,y+h,'rgba(100,200,255,.95)');line(x+w,y,x,y+h,'rgba(100,200,255,.95)')}
+    else if(t==='gold'){ctx.strokeStyle='rgba(255,190,70,.95)';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(x+w/2,y+h/2,w*.32,h*.40,-.21,0,Math.PI*2);ctx.stroke()}
+  }
+}
 function setLocked(on){
 document.body.classList.toggle('locked',on);
 if(on){requestWakeLock();status('🔒 畫面已鎖定：可專心作畫。點右上角「解鎖畫面」返回操作。','ok')}
 else releaseWakeLock();
 }
-$('compApply').onclick=function(){let o=$('compOverlay');o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖'};$('compBtn').onclick=function(){let o=$('compOverlay');if(o.classList.contains('show')){o.classList.remove('show');$('compBtn').textContent='📐 構圖模式'}else{o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖'}};$('gridBtn').onclick=function(){
-$('grid9').classList.toggle('show');
-$('gridBtn').textContent=$('grid9').classList.contains('show')?'▦ 關閉九宮格':'▦ 九宮格';
-};
+$('compApply').onclick=function(){let o=$('compOverlay');o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖';drawGuides()};
+$('compBtn').onclick=function(){let o=$('compOverlay');if(o.classList.contains('show')){o.classList.remove('show');$('compBtn').textContent='📐 構圖模式'}else{o.className='compOverlay '+$('compType').value+' show';$('compBtn').textContent='📐 關閉構圖'}drawGuides()};
+$('gridBtn').onclick=function(){$('grid9').classList.toggle('show');$('gridBtn').textContent=$('grid9').classList.contains('show')?'▦ 關閉九宮格':'▦ 九宮格';drawGuides()};
+window.addEventListener('resize',drawGuides);
 $('lockBtn').onclick=function(){setLocked(true)};
 $('unlockBtn').onclick=function(){setLocked(false)};
 document.addEventListener('visibilitychange',function(){
@@ -260,7 +280,7 @@ async function pickYouTube(q){
 
 async function pickTVMazeImage(q){
   $('playerBox').style.display='none';
-  $('imageResult').style.display='block';
+  $('imageStage').style.display='block';
   status('正在搜尋影視劇照……','ok');
 
   let type=$('sceneType').value;
@@ -318,7 +338,7 @@ async function pickTVMazeImage(q){
     $('meta').textContent='TVmaze 影視劇照｜'+(show.name||q)+(ep.season?'｜S'+ep.season+'E'+ep.number:'');
     $('time').textContent='劇照';
     $('imageResult').innerHTML='<a href="'+escAttr(original)+'" target="_blank" rel="noopener"><img src="'+escAttr(image)+'" alt="'+escAttr(title)+'" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"></a><div class="tip" style="margin-top:8px">劇照來自 TVmaze 的劇集圖片資料；點圖片可查看作品／劇集資訊。</div>';
-    status('已抽到影視劇照！','ok');
+    const im=$('imageResult').querySelector('img');if(im)im.onload=drawGuides;drawGuides();status('已抽到影視劇照！','ok');
   }catch(e){
     console.error(e);
     status('影視劇照抽取失敗：'+(e.message||'未知錯誤')+'\\n請輸入具體作品名稱，例如：First Love、Breaking Bad、鬼滅之刃。','bad');
