@@ -765,4 +765,37 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 $('install').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;$('install').classList.remove('show')}else alert('請使用 Chrome 選單 →「新增至主畫面」或「安裝應用程式」。')};
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
+<script>
+(function(){
+  function boot(){
+    var b=document.getElementById('pick');
+    if(!b)return;
+    b.addEventListener('click',function(){
+      var q=document.getElementById('query');
+      var src=document.getElementById('sourceType');
+      var status=document.getElementById('status');
+      var text=(q&&q.value||'').trim();
+      if(!text){
+        if(status){status.textContent='請先輸入想畫的題材，例如：哈利波特、日劇、漫威。';status.className='bad';}
+        if(q)q.focus();
+        return;
+      }
+      if(status){status.textContent='🎲 已收到隨機取景指令，正在處理「'+text+'」……';status.className='ok';}
+      try{
+        if(typeof window.pick==='function'){window.pick();return;}
+      }catch(e){console.error(e);}
+      var type=src&&src.value||'google';
+      if(type==='google'||type==='all'){
+        var url='https://www.google.com/search?tbm=isch&q='+encodeURIComponent(text);
+        window.open(url,'_blank');
+        if(status){status.textContent='🔎 已開啟「'+text+'」Google 圖片搜尋；可選圖後回到百日繪。';status.className='ok';}
+      }else{
+        if(status){status.textContent='⚠️ 主程式尚未載入完成，請重新整理頁面後再試。';status.className='bad';}
+      }
+    },false);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
+  else boot();
+})();
+</script>
 </body></html>
