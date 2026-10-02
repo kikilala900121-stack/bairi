@@ -718,6 +718,24 @@ window.randomGoogleImage=async function(q){
     return true;
   }
 
+  async function tryCommons(){
+    const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent(searchQ)+'&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url|mime&iiurlwidth=1400&format=json&origin=*';
+    const rr=await fetch(api,{mode:'cors',cache:'no-store'});
+    if(!rr.ok)throw new Error('Wikimedia Commons HTTP '+rr.status);
+    const data=await rr.json();
+    const pages=Object.values((data.query&&data.query.pages)||{});
+    const items=pages.filter(function(x){
+      const info=x&&x.imageinfo&&x.imageinfo[0];
+      return info&&info.url&&(!info.mime||info.mime.indexOf('image/')===0);
+    });
+    if(!items.length)throw new Error('Commons 沒有可用圖片');
+    const item=items[Math.floor(Math.random()*items.length)];
+    const info=item.imageinfo[0];
+    const chosen=info.thumburl||info.url;
+    await analyzeExternalImage(chosen,'🌐 Wikimedia Commons｜'+searchQ,false,info.url,'commons');
+    return true;
+  }
+
   async function tryOpenverse(){
     const api='https://api.openverse.org/v1/images/?q='+encodeURIComponent(searchQ)+'&page_size=30';
     const rr=await fetch(api,{mode:'cors',cache:'no-store'});
@@ -726,10 +744,10 @@ window.randomGoogleImage=async function(q){
     const items=(data.results||[]).filter(function(x){
       return x&&(x.url||x.thumbnail);
     });
-    if(!items.length)throw new Error('沒有可用網路圖片');
+    if(!items.length)throw new Error('Openverse 沒有可用圖片');
     const item=items[Math.floor(Math.random()*items.length)];
     const chosen=item.url||item.thumbnail;
-    await analyzeExternalImage(chosen,'🌐 網路圖片｜'+searchQ,false,chosen,'openverse');
+    await analyzeExternalImage(chosen,'🌐 Openverse｜'+searchQ,false,chosen,'openverse');
     return true;
   }
 
@@ -744,9 +762,18 @@ window.randomGoogleImage=async function(q){
       $('meta').textContent='Google 圖片目前無法直接取得，改用網路圖片備援……';
     }
 
+    try{
+      await tryCommons();
+      $('meta').textContent='Wikimedia Commons｜隨機選圖（Google 備援）';
+      status('🎯 Google 圖片目前受限制，已改用 Wikimedia Commons 隨機選圖。','ok');
+      return;
+    }catch(commonsErr){
+      console.warn('Commons image search failed; trying Openverse:',commonsErr);
+    }
+
     await tryOpenverse();
-    $('meta').textContent='網路圖片｜隨機選圖（Google 備援）';
-    status('🎯 Google 圖片目前受限制，已自動改用網路圖片並隨機選圖。','ok');
+    $('meta').textContent='Openverse｜隨機選圖（Google 備援）';
+    status('🎯 Google 圖片目前受限制，已改用 Openverse 隨機選圖。','ok');
   }catch(e){
     console.error('Image picker error:',e);
     $('meta').textContent='圖片搜尋暫時無法取得';
