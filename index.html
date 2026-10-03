@@ -622,15 +622,30 @@ async function fetchImageData(src){
 }
 
 async function analyzeExternalImage(src,title,isLocal,sourceUrl,sourceType){
-  $('playerBox').style.display='none';$('imageStage').style.display='block';current=null;lastUrl=sourceUrl||(!isLocal?src:'');
-  $('title').textContent=title;$('meta').textContent='正在把圖片下載到瀏覽器內……';$('time').textContent='圖片';
+  $('playerBox').style.display='none';
+  $('imageStage').style.display='block';
+  current=null;
+  lastUrl=sourceUrl||(!isLocal?src:'');
+  $('title').textContent=title;
+  $('meta').textContent='正在把圖片下載到瀏覽器內……';
+  $('time').textContent='圖片';
   $('imageResult').innerHTML='<div class="tip" id="pinLoadTip">正在取得圖片資料……</div>';
   const tip=$('pinLoadTip');
   const label=sourceType==='google'?'Google 圖片':sourceType==='bing'?'Bing 圖片':sourceType==='commons'?'Wikimedia Commons':sourceType==='openverse'?'Openverse':'Pinterest';
+
   try{
     let dataUrl;
-    if(isLocal && /^data:image\//i.test(src))dataUrl=src;
+    if(isLocal && /^data:image\//i.test(src)) dataUrl=src;
     else dataUrl=await fetchImageData(src);
+
+    const ok=await new Promise(function(resolve){
+      const test=new Image();
+      test.onload=function(){resolve(test.naturalWidth>20&&test.naturalHeight>20)};
+      test.onerror=function(){resolve(false)};
+      test.referrerPolicy='no-referrer';
+      test.src=dataUrl;
+    });
+    if(!ok)throw new Error('下載後的圖片無法解碼');
 
     $('meta').textContent='圖片已下載到瀏覽器｜可自動分析構圖';
     $('imageResult').innerHTML='<img id="externalPinImage" alt="'+escAttr(title)+'" referrerpolicy="no-referrer" style="display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:14px;background:#000"><div id="pinLoadTip" class="tip" style="margin-top:8px">圖片已轉成瀏覽器內資料，正在分析構圖……</div>';
@@ -639,16 +654,18 @@ async function analyzeExternalImage(src,title,isLocal,sourceUrl,sourceType){
     im.src=dataUrl;
 
     saveToday({
-      title:title,time:0,duration:0,id:'',source:sourceType==='google'?'google-image':sourceType==='bing'?'bing-image':sourceType==='commons'?'commons-image':sourceType==='openverse'?'openverse-image':'pinterest-image',
+      title:title,time:0,duration:0,id:'',
+      source:sourceType==='google'?'google-image':sourceType==='bing'?'bing-image':sourceType==='commons'?'commons-image':sourceType==='openverse'?'openverse-image':'pinterest-image',
       query:$('query').value.trim(),scene:$('sceneType').value,
       image:'',original:sourceUrl||src
     });
     status('✅ '+label+'圖片已下載到瀏覽器內，正在分析構圖……','ok');
+    return true;
   }catch(e){
-    console.error(e);
+    console.error(label+' image error:',e);
     if(tip)tip.textContent='圖片下載失敗。';
     $('meta').textContent='無法取得圖片資料';
-    status(label+'圖片下載失敗；請重新嘗試或改用其他圖片來源。','bad');
+    throw e;
   }
 }
 function showGoogleImagePicker(searchQ,url){
@@ -713,9 +730,16 @@ window.randomGoogleImage=async function(q){
       }
     });
     if(!urls.length)throw new Error('Google 沒有回傳可用圖片');
-    const chosen=urls[Math.floor(Math.random()*urls.length)];
-    await analyzeExternalImage(chosen,'🔎 Google 圖片｜'+searchQ,false,chosen,'google');
-    return true;
+
+    const shuffled=urls.sort(()=>Math.random()-0.5).slice(0,10);
+    let last=null;
+    for(const chosen of shuffled){
+      try{
+        await analyzeExternalImage(chosen,'🔎 Google 圖片｜'+searchQ,false,chosen,'google');
+        return true;
+      }catch(err){last=err}
+    }
+    throw last||new Error('Google 圖片全部無法下載');
   }
 
   async function tryBing(){
